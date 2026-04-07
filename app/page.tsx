@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { FeatureCard, } from '@/components/ui/feature-card'
+import { FEATURES } from '@/data/features'
 
 export default function Home() {
   return (
@@ -13,7 +15,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="flex flex-col items-center text-center mb-12">
           <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent">
-            Dividí gastos con amigos, <br /> sin complicaciones.
+            Dividí gastos sin complicaciones.
           </h1>
 
           <p className="max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
@@ -34,41 +36,14 @@ export default function Home() {
 
         {/* Grid de features basado en Necesidades */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">📁</div>
-            <h3 className="font-semibold mb-2">Múltiples Grupos</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Definí grupos para cada ocasión: el viaje de verano, la cena del viernes o el alquiler del departamento.</p>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">➕</div>
-            <h3 className="font-semibold mb-2">Gastos Grupales</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Agregá gastos de forma rápida y sencilla para que nadie se olvide de nada.</p>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">✉️</div>
-            <h3 className="font-semibold mb-2">Invitar Amigos</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Sumá a tus amigos a los grupos para que todos puedan cargar sus propios gastos.</p>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">⚖️</div>
-            <h3 className="font-semibold mb-2">Repartir Gastos</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Algoritmos inteligentes para que la división sea justa y equitativa entre todos.</p>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">🔔</div>
-            <h3 className="font-semibold mb-2">Recordatorios y Cierres</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Alertas de deudas pendientes y cierre de grupos una vez que las cuentas están saldadas.</p>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-            <div className="text-blue-500 mb-3 text-xl">🌍</div>
-            <h3 className="font-semibold mb-2">Manejo Multimoneda</h3>
-            <p className="text-sm text-zinc-500 leading-relaxed">Ideal para viajes internacionales. Gestioná gastos en diferentes divisas sin perder el control.</p>
-          </div>
+          {FEATURES.map((feature, index) => (
+            <FeatureCard 
+              key={index}
+              icon={feature.icon}
+              title={feature.title}
+              description={feature.description}
+            />
+          ))}
         </div>
       </main>
 
