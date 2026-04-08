@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { FeatureCard, } from '@/components/ui/feature-card'
 import { FEATURES } from '@/data/features'

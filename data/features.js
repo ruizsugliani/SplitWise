@@ -30,3 +30,34 @@ export const FEATURES = [
     description: "Ideal para viajes internacionales. Gestioná gastos en diferentes divisas sin perder el control."
   }
 ];
+
+// Datos de ejemplo (Luego los traeremos de Supabase)
+export const SPENDING_GROUPS = [
+  {
+    id: "1",
+    name: "BBQ at the Park",
+    members: 3,
+    expenses_count: 2,
+    total_amount: "$ 115.00",
+    icon: "🍖",
+    status: "active"
+  },
+  {
+    id: "2",
+    name: "Trip to Iguazu",
+    members: 4,
+    expenses_count: 3,
+    total_amount: "$ 470.00 • ARS $8500.00",
+    icon: "🌴",
+    status: "active"
+  },
+  {
+    id: "3",
+    name: "Weekend Dinner",
+    members: 2,
+    expenses_count: 1,
+    total_amount: "$ 75.00",
+    icon: "🍝",
+    status: "active"
+  }
+];
