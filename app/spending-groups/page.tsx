@@ -1,44 +1,72 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { SPENDING_GROUPS } from "@/data/features";
 import { SpendingGroupCard } from '@/components/ui/spending-grop-card';
+import { CreateGroupModal } from '@/components/create-group-modal';
 
 export default async function ExpensesPage() {
     const supabase = await createClient()
-    const { data, error } = await supabase.auth.getClaims()
+    
+    // 1. Obtenemos la sesión del usuario
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (error || !data?.claims) {
+    if (authError || !user) {
         redirect('/auth/login')
+    }
+
+    // 2. Traemos los grupos donde el usuario es miembro
+    // Usamos una consulta relacional para contar los miembros automáticamente
+    const { data: groups, error: groupsError } = await supabase
+    .from('spending_groups')
+    .select(`
+        id,
+        name,
+        icon,
+        spending_group_members(count)
+    `)
+
+    if (groupsError) {
+        console.error("Error fetching groups:", groupsError)
     }
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] p-6 text-white">
-        <header className="max-w-2xl mx-auto text-center mb-10 pt-10">
-            <h1 className="text-3xl font-bold tracking-tight">SplitWise</h1>
-            <p className="text-zinc-400">Manage your group expenses</p>
-        </header>
+            <header className="max-w-2xl mx-auto text-center mb-10 pt-10">
+                <h1 className="text-3xl font-bold tracking-tight">SplitWise</h1>
+                <p className="text-zinc-400">Administra tus gastos en grupo</p>
+            </header>
 
-        <main className="max-w-xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-400">
-                Active Groups
-            </h2>
-            </div>
+            <main className="max-w-xl mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-400">
+                        Grupos Activos
+                    </h2>
+                </div>
 
-            <div className="space-y-4">
-            {SPENDING_GROUPS.map((group) => (
-                <SpendingGroupCard 
-                    key={group.id}
-                    {...group}
-                />
-            ))}
-            </div>
+                <div className="space-y-4">
+                    {groups && groups.length > 0 ? (
+                        groups.map((group) => (
+                            <SpendingGroupCard 
+                                key={group.id}
+                                id={group.id}
+                                name={group.name}
+                                icon={group.icon}
+                                // Accedemos al conteo de la relación
+                                members={group.spending_group_members[0]?.count || 0}
+                                // Hardcodeamos estos valores hasta crear la tabla de gastos
+                                expenses_count={0}
+                                total_amount="$ 0.00"
+                            />
+                        ))
+                    ) : (
+                        <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl">
+                            <p className="text-zinc-500">No tienes grupos activos aún.</p>
+                            <p className="text-zinc-600 text-sm">¡Crea uno con el botón +!</p>
+                        </div>
+                    )}
+                </div>
 
-            {/* Botón Flotante (FAB) */}
-            <button className="fixed bottom-8 right-8 w-14 h-14 bg-white text-black rounded-full shadow-2xl flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all">
-            +
-            </button>
-        </main>
+                <CreateGroupModal />
+            </main>
         </div>
     );
 }

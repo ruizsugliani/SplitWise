@@ -61,3 +61,5 @@ export const SPENDING_GROUPS = [
     status: "active"
   }
 ];
+
+export const EMOJIS = ["🎉", "🍖", "🌴", "🍝", "🍕", "🎵", "⚽", "🏖️", "🎬", "🍻"]
