@@ -65,7 +65,7 @@ const { data: group, error } = await supabase
             <AddMemberModal groupId={id} />
             
             {/* Reemplazamos tu div estático por el nuevo Modal interactivo */}
-            <MembersListModal groupId={id} members={membersList} memberCount={memberCount} />
+            <MembersListModal groupId={id} members={membersList} memberCount={memberCount} creatorId={group.created_by} />
 
             <button className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
                 <ReceiptText className="w-5 h-5" />
