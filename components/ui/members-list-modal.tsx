@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, X, Trash2, Edit2, Users } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Check, X, Trash2, Edit2, Users, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { removeMember, updateGuestName } from '@/app/actions/members'
@@ -20,7 +20,7 @@ const getMemberInfo = (member: Member) => {
   const isGuest = !member.profiles;
   const name = member.profiles?.full_name || member.member_name || 'Sin nombre';
   const rawAvatar = member.profiles?.avatar_url;
-  
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const avatar = rawAvatar 
     ? `${supabaseUrl}/storage/v1/object/public/avatars/${rawAvatar}` 
@@ -45,15 +45,43 @@ export function MembersListModal({
   
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
-  
+
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
   const router = useRouter()
 
-  const handleDelete = async (memberId: string) => {
-    setIsDeleting(memberId)
-    await removeMember(memberId)
-    router.refresh()
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toastMessage])
+
+  const confirmDelete = async () => {
+    if (!memberToDelete) return
+    
+    const id = memberToDelete.id
+    setMemberToDelete(null)
+    setIsDeleting(id)
+    
+    const result = await removeMember(id)
+    
+    if (result.success) {
+      setToastMessage("Miembro eliminado correctamente")
+      router.refresh()
+    } else {
+      alert("Error al borrar")
+    }
     setIsDeleting(null)
   }
+
+  // const handleDelete = async (memberId: string) => {
+  //   setIsDeleting(memberId)
+  //   await removeMember(memberId)
+  //   router.refresh()
+  //   setIsDeleting(null)
+  // }
 
   const handleSaveEdit = async (memberId: string) => {
     if (!editName.trim()) return;
@@ -102,7 +130,7 @@ export function MembersListModal({
         <span className="text-zinc-400 font-medium">{memberCount} Miembros</span>
       </button>
 
-      {/* 2. Modal ABM */}
+      {/* MODAL PRINCIPAL */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-[#121212] border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
@@ -122,7 +150,7 @@ export function MembersListModal({
             <div className="p-4 max-h-[60vh] overflow-y-auto">
               {members.length === 0 ? (
                 <p className="text-zinc-500 text-center py-4">No hay miembros aún.</p>
-              ) : (
+                ) : (
                 <ul className="space-y-3">
                   {members.map((member) => {
                     const { name, avatar, initial, isGuest } = getMemberInfo(member);
@@ -180,13 +208,14 @@ export function MembersListModal({
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                               )}
-                              <button 
-                                onClick={() => handleDelete(member.id)}
-                                disabled={isDeleting === member.id}
-                                className={`p-2 rounded-lg transition-colors ${isDeleting === member.id ? 'opacity-50 cursor-not-allowed' : 'text-zinc-500 hover:text-red-400 hover:bg-red-400/10'}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex gap-1 ml-2">
+                                <button 
+                                  onClick={() => setMemberToDelete(member)}
+                                  className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </>
                           )}
                         </div>
@@ -195,15 +224,52 @@ export function MembersListModal({
                   })}
                 </ul>
               )}
-            </div>
-            
-            {/* Footer Modal */}
-            <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
-               <button onClick={() => setIsOpen(false)} className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors">
-                 Cerrar
-               </button>
-            </div>
+            </div>          
+          </div>
+        </div>
+      )}
 
+      {/* 1. MODAL DE CONFIRMACIÓN (Sobre el anterior) */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl max-w-xs w-full shadow-2xl text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">¿Estás seguro?</h3>
+            <p className="text-zinc-400 text-sm mb-6">
+              Vas a eliminar a <span className="text-white font-semibold">{getMemberInfo(memberToDelete).name}</span> de este grupo.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={confirmDelete}
+                disabled={isDeleting === memberToDelete.id}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isDeleting === memberToDelete.id ? (
+                  <span className="animate-pulse">Eliminando...</span>
+                ) : (
+                  "Eliminar"
+                )}
+              </button>
+              <button 
+                onClick={() => setMemberToDelete(null)}
+                disabled={isDeleting === memberToDelete.id}
+                className="flex-1 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. TOAST DE CONFIRMACIÓN (Notificación flotante) */}
+      {toastMessage && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-70 animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className="bg-zinc-100 text-black px-6 py-3 rounded-2xl font-bold shadow-2xl flex items-center gap-2">
+            <Check className="w-5 h-5 text-green-600" />
+            {toastMessage}
           </div>
         </div>
       )}
