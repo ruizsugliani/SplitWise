@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { SpendingGroupCard } from '@/components/ui/spending-grop-card';
 import { CreateGroupModal } from '@/components/create-group-modal';
 import { LogoutButton } from '@/components/logout-button';
+import { ProfileButton } from '@/components/profile-button';
 
 export default async function SpendingGroupsPage() {
     const supabase = await createClient()
@@ -65,6 +66,7 @@ export default async function SpendingGroupsPage() {
                 </div>
                 
                 <LogoutButton />
+                <ProfileButton />
                 <CreateGroupModal />
             </main>
         </div>
