@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SpendingGroupCard } from '@/components/ui/spending-grop-card';
 import { CreateGroupModal } from '@/components/create-group-modal';
+import { LogoutButton } from '@/components/logout-button';
 
-export default async function ExpensesPage() {
+export default async function SpendingGroupsPage() {
     const supabase = await createClient()
     
     // 1. Obtenemos la sesión del usuario
@@ -50,9 +51,7 @@ export default async function ExpensesPage() {
                                 id={group.id}
                                 name={group.name}
                                 icon={group.icon}
-                                // Accedemos al conteo de la relación
                                 members={group.spending_group_members[0]?.count || 0}
-                                // Hardcodeamos estos valores hasta crear la tabla de gastos
                                 expenses_count={0}
                                 total_amount="$ 0.00"
                             />
@@ -64,7 +63,8 @@ export default async function ExpensesPage() {
                         </div>
                     )}
                 </div>
-
+                
+                <LogoutButton />
                 <CreateGroupModal />
             </main>
         </div>

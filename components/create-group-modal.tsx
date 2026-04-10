@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { EMOJIS } from '@/data/features'
 import { createClient } from '@/lib/supabase/client'
+import { Button } from '@/components/ui/button'
 
 export function CreateGroupModal() {
   const [isOpen, setIsOpen] = useState(false)
@@ -61,12 +62,14 @@ export function CreateGroupModal() {
 
   return (
     <>
-      <button 
+      <Button 
         onClick={() => setIsOpen(true)}
+        variant="outline"
         className="fixed bottom-8 right-8 w-14 h-14 bg-white text-black rounded-full shadow-2xl flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all z-20"
+        title="Crear un nuevo grupo"
       >
         +
-      </button>
+      </Button>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

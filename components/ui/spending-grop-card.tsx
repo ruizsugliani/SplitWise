@@ -11,11 +11,8 @@ interface SpendingGroupCardProps {
 
 export function SpendingGroupCard({ id, icon, name, members, expenses_count, total_amount }: SpendingGroupCardProps) {
   return (
-    <Link 
-      href={`/expenses/${id}`} // La 'key' no va aquí
-      className="block group"
-    >
-      <div className="flex items-center p-4 bg-[#171717] rounded-2xl border border-white/10 shadow-sm transition-all hover:shadow-md hover:scale-[1.01] active:scale-[0.99]">
+    <Link href={`/spending-groups/${id}`}>
+      <div className="flex items-center mt-2 mb-2 p-4 bg-[#171717] rounded-2xl border border-white/10 shadow-sm transition-all hover:shadow-md hover:scale-[1.01] active:scale-[0.99]">
         <div className="w-14 h-14 flex items-center justify-center text-3xl bg-white/5 rounded-xl mr-4 group-hover:bg-blue-500/10 transition-colors">
           {icon}
         </div>
