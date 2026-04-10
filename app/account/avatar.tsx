@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
+import { Camera, Loader2 } from 'lucide-react' // Importamos iconos para mejor UX
 
 export default function Avatar({
   uid,
@@ -46,6 +47,7 @@ export default function Avatar({
 
       const file = event.target.files[0]
       const fileExt = file.name.split('.').pop()
+      // filePath único para evitar colisiones
       const filePath = `${uid}-${Math.random()}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
@@ -63,28 +65,53 @@ export default function Avatar({
   }
 
   return (
-    <div>
-      {avatarUrl ? (
-        <Image
-          width={size}
-          height={size}
-          src={avatarUrl}
-          alt="Avatar"
-          className="avatar image rounded-xl"
-          style={{ height: size, width: size }}
-        />
-      ) : (
-        <div className="avatar no-image" style={{ height: size, width: size }} />
-      )}
-      <div style={{ width: size }}>
-        <label className="button primary block" htmlFor="single" style={{visibility: 'hidden',position: 'absolute',}}>
-          {uploading ? 'Uploading ...' : 'Upload'}
+    <div className="flex flex-col items-center gap-4">
+      {/* Contenedor de la Imagen */}
+      <div className="relative group">
+        {avatarUrl ? (
+          <Image
+            width={size}
+            height={size}
+            src={avatarUrl}
+            alt="Avatar"
+            className="rounded-3xl object-cover border-4 border-white/5 shadow-2xl transition-transform group-hover:scale-[1.02]"
+            style={{ height: size, width: size }}
+          />
+        ) : (
+          <div 
+            className="bg-zinc-800 rounded-3xl flex items-center justify-center border-4 border-dashed border-white/10" 
+            style={{ height: size, width: size }}
+          >
+            <Camera className="w-12 h-12 text-zinc-600" strokeWidth={1} />
+          </div>
+        )}
+      </div>
+      
+      {/* Contenedor del Botón de Subida */}
+      <div className="relative">
+        <label 
+          className={`
+            cursor-pointer bg-white text-black text-xs font-bold py-2 px-4 rounded-full 
+            hover:bg-zinc-200 transition-all active:scale-95 flex items-center gap-2
+            shadow-md shadow-black/30
+            ${uploading ? 'opacity-60 cursor-not-allowed' : ''}
+          `} 
+          htmlFor="single"
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Subiendo...
+            </>
+          ) : (
+            <>
+              <Camera className="w-3.5 h-3.5" />
+              Cambiar foto
+            </>
+          )}
         </label>
         <input
-          style={{
-            visibility: 'hidden',
-            position: 'absolute',
-          }}
+          className="hidden"
           type="file"
           id="single"
           accept="image/*"

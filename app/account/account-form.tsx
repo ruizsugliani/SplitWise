@@ -94,7 +94,6 @@ export default function AccountForm({ claims }: { claims: Claims | null }) {
               updateProfile({ fullname, username, website, avatar_url: url })
             }}
           />
-          <p className="text-gray-500 text-sm">{claims?.email}</p>
         </div>
 
         <div className="space-y-4">
