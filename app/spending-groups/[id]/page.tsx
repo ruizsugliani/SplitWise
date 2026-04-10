@@ -42,8 +42,7 @@ const { data: group, error } = await supabase
       </div>
     )
   }
-  console.log("DATOS DE LOS MIEMBROS:", JSON.stringify(group.members, null, 2));
-  // Extraemos la lista de miembros para pasársela al modal
+
   const membersList = group.members || []
   const memberCount = membersList.length
 

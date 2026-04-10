@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, X, Trash2, Edit2 } from 'lucide-react'
-// import { useRouter } from 'next/navigation'
+import { Check, X, Trash2, Edit2, Users } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { removeMember, updateGuestName } from '@/app/actions/members'
 
 type Member = {
   id: string
@@ -41,12 +42,30 @@ export function MembersListModal({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
-//   const router = useRouter()
+  
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+  
+  const router = useRouter()
 
   const handleDelete = async (memberId: string) => {
     setIsDeleting(memberId)
-    console.log("Borrando miembro:", memberId)
+    await removeMember(memberId)
+    router.refresh()
     setIsDeleting(null)
+  }
+
+  const handleSaveEdit = async (memberId: string) => {
+    if (!editName.trim()) return;
+    
+    setEditingId(null)
+    await updateGuestName(memberId, editName)
+    router.refresh()
+  }
+
+  const startEditing = (memberId: string, currentName: string) => {
+    setEditingId(memberId)
+    setEditName(currentName)
   }
 
   const displayMembers = members.slice(0, 3)
@@ -107,10 +126,11 @@ export function MembersListModal({
                 <ul className="space-y-3">
                   {members.map((member) => {
                     const { name, avatar, initial, isGuest } = getMemberInfo(member);
+                    const isEditingThis = editingId === member.id;
 
                     return (
                       <li key={member.id} className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors border border-zinc-800/50">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 w-full">
                           
                           {/* Avatar en la lista */}
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
@@ -121,26 +141,54 @@ export function MembersListModal({
                             )}
                           </div>
                           
-                          {/* Nombre y Badge */}
-                          <div className="flex flex-col">
-                             <span className="font-medium text-zinc-200">{name}</span>
-                             {isGuest && <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Invitado</span>}
+                          {/* Nombre / Input de Edición */}
+                          <div className="flex flex-col flex-1">
+                            {isEditingThis ? (
+                              <input 
+                                autoFocus
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(member.id)}
+                                className="bg-zinc-950 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
+                              />
+                            ) : (
+                              <>
+                                <span className="font-medium text-zinc-200">{name}</span>
+                                {isGuest && <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Invitado</span>}
+                              </>
+                            )}
                           </div>
-
                         </div>
                         
-                        {/* Botones de acción ABM */}
-                        <div className="flex gap-2">
-                          <button className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(member.id)}
-                            disabled={isDeleting === member.id}
-                            className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {/* Acciones */}
+                        <div className="flex gap-1 ml-2">
+                          {isEditingThis ? (
+                            // Modo Edición: Mostrar botón de Guardar y Cancelar
+                            <>
+                              <button onClick={() => handleSaveEdit(member.id)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            // Modo Lectura: Mostrar Editar (solo si es invitado) y Borrar
+                            <>
+                              {isGuest && (
+                                <button onClick={() => startEditing(member.id, name)} className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleDelete(member.id)}
+                                disabled={isDeleting === member.id}
+                                className={`p-2 rounded-lg transition-colors ${isDeleting === member.id ? 'opacity-50 cursor-not-allowed' : 'text-zinc-500 hover:text-red-400 hover:bg-red-400/10'}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </li>
                     )
