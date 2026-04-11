@@ -4,6 +4,7 @@ import { ArrowLeft, ReceiptText } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal' // NUEVO COMPONENTE
 import Link from 'next/link'
+import { AddExpenseModal } from '@/components/add-expense-modal'
 
 export default async function SpendingGroupDashboardPage({ 
   params 
@@ -67,10 +68,7 @@ const { data: group, error } = await supabase
             {/* Reemplazamos tu div estático por el nuevo Modal interactivo */}
             <MembersListModal groupId={id} members={membersList} memberCount={memberCount} creatorId={group.created_by} />
 
-            <button className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
-                <ReceiptText className="w-5 h-5" />
-                Agregar gasto
-            </button>
+            <AddExpenseModal />
         </div>
 
         {/* Lista de Gastos... (igual) */}
