@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { ArrowLeft, UserPlus, Users, ReceiptText } from 'lucide-react'
+import { ArrowLeft, ReceiptText } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
+import { MembersListModal } from '@/components/ui/members-list-modal' // NUEVO COMPONENTE
 import Link from 'next/link'
 
 export default async function SpendingGroupDashboardPage({ 
   params 
 }: { 
-  params: Promise<{ id: string }> // Cambiado a Promise para Next.js 15
+  params: Promise<{ id: string }> 
 }) {
   const supabase = await createClient()
 
@@ -16,11 +17,19 @@ export default async function SpendingGroupDashboardPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: group, error } = await supabase
+const { data: group, error } = await supabase
     .from('spending_groups')
     .select(`
       *,
-      members: spending_group_members(count)
+      members: spending_group_members (
+        id,
+        member_name,
+        profiles (
+          id,
+          full_name,
+          avatar_url
+        )
+      )
     `)
     .eq('id', id)
     .single()
@@ -34,16 +43,14 @@ export default async function SpendingGroupDashboardPage({
     )
   }
 
-  const memberCount = (group.members as any)?.[0]?.count || 0
+  const membersList = group.members || []
+  const memberCount = membersList.length
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      {/* Header de Navegación */}
+      {/* Header de Navegación... (igual) */}
       <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
-        <Link 
-          href="/spending-groups" 
-          className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
-        >
+        <Link href="/spending-groups" className="p-2 hover:bg-zinc-900 rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <div className="flex flex-col items-center">
@@ -54,14 +61,11 @@ export default async function SpendingGroupDashboardPage({
       </header>
 
       <main className="max-w-xl mx-auto">
-
         <div className="grid grid-cols-2 gap-4 mb-8">
             <AddMemberModal groupId={id} />
             
-            <div className="flex items-center justify-center gap-2 bg-zinc-900 py-4 px-4 rounded-2xl text-zinc-400 border border-zinc-800">
-                <Users className="w-5 h-5" />
-                <span>{memberCount} Miembros</span>
-            </div>
+            {/* Reemplazamos tu div estático por el nuevo Modal interactivo */}
+            <MembersListModal groupId={id} members={membersList} memberCount={memberCount} creatorId={group.created_by} />
 
             <button className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
                 <ReceiptText className="w-5 h-5" />
@@ -69,7 +73,7 @@ export default async function SpendingGroupDashboardPage({
             </button>
         </div>
 
-        {/* Lista de Gastos */}
+        {/* Lista de Gastos... (igual) */}
         <section className="mt-10">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4 text-center md:text-left">
             Gastos recientes
