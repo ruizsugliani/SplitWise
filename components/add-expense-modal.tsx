@@ -2,18 +2,53 @@
 
 import { useState } from "react";
 import { ReceiptText, X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
 };
 
-export function AddExpenseModal({ members }: { members: Member[] }) {
+export function AddExpenseModal({
+  groupId,
+  members,
+}: {
+  groupId: string;
+  members: Member[];
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState("you");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+
+  const supabase = createClient();
+
+  const handleAddExpense = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No hay usuario");
+
+      const { error: expenseError } = await supabase.from("expenses").insert([
+        {
+          spending_group_id: groupId,
+          created_by: user.id,
+          paid_by: paidBy,
+          value: amount,
+          description: description,
+        },
+      ]);
+
+      if (expenseError) throw expenseError;
+
+      closeModal();
+    } catch (error) {
+      console.error("Error al crear gasto:", error);
+      alert("Hubo un error al crear gasto");
+    }
+  };
 
   const togglePerson = (id: string) => {
     setSelectedPeople((prev) =>
@@ -155,6 +190,7 @@ export function AddExpenseModal({ members }: { members: Member[] }) {
             {/* Submit */}
             <button
               disabled={!amount || !description || selectedPeople.length == 0}
+              onClick={handleAddExpense}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
             >
               Confirmar
