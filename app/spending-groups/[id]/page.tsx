@@ -68,7 +68,7 @@ const { data: group, error } = await supabase
             {/* Reemplazamos tu div estático por el nuevo Modal interactivo */}
             <MembersListModal groupId={id} members={membersList} memberCount={memberCount} creatorId={group.created_by} />
 
-            <AddExpenseModal />
+            <AddExpenseModal members={membersList}/>
         </div>
 
         {/* Lista de Gastos... (igual) */}

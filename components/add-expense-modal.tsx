@@ -3,27 +3,17 @@
 import { useState } from "react";
 import { ReceiptText, X } from "lucide-react";
 
-// Data is hardcoded for now. Later it will fetch it from supabase
-type Person = {
-  id: string;
-  name: string;
+const getMemberName = (member: Member) => {
+  return member.profiles?.full_name || member.member_name || "Sin nombre";
 };
 
-const people: Person[] = [
-  { id: "you", name: "You" },
-  { id: "alex", name: "Alex" },
-  { id: "pepe", name: "Pepe" },
-];
-
-export function AddExpenseModal() {
+export function AddExpenseModal({ members }: { members: Member[] }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState("you");
-  const [selectedPeople, setSelectedPeople] = useState<string[]>(
-    people.map((p) => p.id),
-  );
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
 
   const togglePerson = (id: string) => {
     setSelectedPeople((prev) =>
@@ -35,6 +25,7 @@ export function AddExpenseModal() {
     setIsOpen(false);
     setAmount("");
     setDescription("");
+    setSelectedPeople([]);
   };
 
   // Calculation logic
@@ -114,9 +105,9 @@ export function AddExpenseModal() {
                 onChange={(e) => setPaidBy(e.target.value)}
                 className="w-full rounded-lg border px-3 py-2"
               >
-                {people.map((p) => (
+                {members.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {getMemberName(p)}
                   </option>
                 ))}
               </select>
@@ -129,7 +120,7 @@ export function AddExpenseModal() {
               </label>
 
               <div className="rounded-xl border p-3">
-                {people.map((p) => {
+                {members.map((p) => {
                   const isSelected = selectedPeople.includes(p.id);
 
                   return (
@@ -143,7 +134,7 @@ export function AddExpenseModal() {
                           checked={isSelected}
                           onChange={() => togglePerson(p.id)}
                         />
-                        {p.name}
+                        {getMemberName(p)}
                       </label>
 
                       <span className="text-sm text-gray-500">
