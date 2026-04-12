@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ReceiptText, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
@@ -22,6 +23,7 @@ export function AddExpenseModal({
   const [paidBy, setPaidBy] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
 
+  const router = useRouter();
   const supabase = createClient();
 
   const handleAddExpense = async () => {
@@ -43,6 +45,7 @@ export function AddExpenseModal({
       if (error) throw error;
 
       closeModal();
+      router.refresh();
     } catch (error) {
       console.error("Error al crear gasto:", error);
       alert("Hubo un error al crear gasto");

@@ -5,6 +5,7 @@ import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal' // NUEVO COMPONENTE
 import Link from 'next/link'
 import { AddExpenseModal } from '@/components/add-expense-modal'
+import ExpenseList from '@/components/ui/expense-list'
 
 export default async function SpendingGroupDashboardPage({ 
   params 
@@ -18,7 +19,7 @@ export default async function SpendingGroupDashboardPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-const { data: group, error } = await supabase
+  const { data: group, error } = await supabase
     .from('spending_groups')
     .select(`
       *,
@@ -76,9 +77,7 @@ const { data: group, error } = await supabase
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4 text-center md:text-left">
             Gastos recientes
           </h2>
-          <div className="text-center py-12 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-3xl">
-            <p className="text-zinc-500 italic">Aún no se han registrado gastos. Comienza agregando alguno!</p>
-          </div>
+          <ExpenseList groupId={id} />
         </section>
       </main>
     </div>
