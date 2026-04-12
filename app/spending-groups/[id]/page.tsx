@@ -122,10 +122,54 @@ export default async function SpendingGroupDashboardPage({
     console.error('Error fetching expenses', expensesError)
   }
 
-  const expenses = (expensesData || []).map((e) => ({
-    ...e,
-    value: Number(e.value || 0),
-  })) as Expense[]
+  const expenses: Expense[] = (expensesData || []).map((raw) => {
+    const e = raw as Record<string, unknown>
+    const signersRaw = Array.isArray(e.expense_signer)
+      ? (e.expense_signer as unknown[])
+      : []
+
+    const normalizeMember = (m: unknown): Member | null => {
+      if (!m) return null
+      const candidate = Array.isArray(m) ? (m[0] as Record<string, unknown> | undefined) : (m as Record<string, unknown>)
+      if (!candidate) return null
+      const profilesRaw = candidate.profiles
+      const profileObj = Array.isArray(profilesRaw)
+        ? (profilesRaw[0] as Record<string, unknown> | undefined)
+        : (profilesRaw as Record<string, unknown> | undefined)
+
+      const profile: MemberProfile | null = profileObj
+        ? {
+            id: String(profileObj.id ?? ''),
+            full_name: (profileObj.full_name as string | null | undefined) ?? null,
+            avatar_url: (profileObj.avatar_url as string | null | undefined) ?? null,
+          }
+        : null
+
+      return {
+        id: String(candidate.id ?? ''),
+        member_name: String(candidate.member_name ?? ''),
+        profile_id: (candidate.profile_id as string | null | undefined) ?? null,
+        profiles: profile,
+      }
+    }
+
+    const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
+      const es = esRaw as Record<string, unknown>
+      return {
+        spending_group_member_id: String(es.spending_group_member_id ?? ''),
+        spending_group_members: normalizeMember(es.spending_group_members),
+      }
+    })
+
+    return {
+      id: String(e.id ?? ''),
+      description: (e.description as string | undefined) ?? '',
+      created_at: (e.created_at as string | undefined) ?? '',
+      paid_by: String(e.paid_by ?? ''),
+      value: Number(e.value ?? 0),
+      expense_signer: expenseSigner,
+    }
+  })
 
   const totalExpenses = expenses.reduce((acc, e) => acc + e.value, 0)
 
