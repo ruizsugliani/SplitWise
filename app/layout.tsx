@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // Importamos Inter
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Configuramos la fuente Inter
-const inter = Inter({ 
-  subsets: ["latin"],
-  display: 'swap',
-});
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "SplitWise",
