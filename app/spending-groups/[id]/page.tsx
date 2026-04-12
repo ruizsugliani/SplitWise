@@ -5,7 +5,7 @@ import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal' // NUEVO COMPONENTE
 import Link from 'next/link'
 import { AddExpenseModal } from '@/components/add-expense-modal'
-import ExpenseList from '@/components/ui/expense-list'
+import ExpensesClient from '@/components/expenses-client'
 
 export default async function SpendingGroupDashboardPage({ 
   params 
@@ -48,6 +48,11 @@ export default async function SpendingGroupDashboardPage({
   const membersList = group.members || []
   const memberCount = membersList.length
 
+  const { data: expenses} = await supabase
+    .from("expenses_with_details")
+    .select("*")
+    .eq("spending_group_id", id)
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       {/* Header de Navegación... (igual) */}
@@ -77,7 +82,7 @@ export default async function SpendingGroupDashboardPage({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4 text-center md:text-left">
             Gastos recientes
           </h2>
-          <ExpenseList groupId={id} />
+          <ExpensesClient expenses={expenses} />
         </section>
       </main>
     </div>
