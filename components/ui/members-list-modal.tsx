@@ -6,16 +6,6 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { removeMember, updateGuestName } from '@/app/actions/members'
 
-type Member = {
-  id: string
-  member_name: string | null  
-  profiles: {
-    id: string
-    full_name: string | null
-    avatar_url: string | null
-  } | null
-}
-
 const getMemberInfo = (member: Member) => {
   const isGuest = !member.profiles;
   const name = member.profiles?.full_name || member.member_name || 'Sin nombre';
