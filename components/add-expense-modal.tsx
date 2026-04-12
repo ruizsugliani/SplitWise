@@ -19,7 +19,7 @@ export function AddExpenseModal({
 
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [paidBy, setPaidBy] = useState("you");
+  const [paidBy, setPaidBy] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
 
   const supabase = createClient();
@@ -31,17 +31,16 @@ export function AddExpenseModal({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay usuario");
 
-      const { error: expenseError } = await supabase.from("expenses").insert([
-        {
-          spending_group_id: groupId,
-          created_by: user.id,
-          paid_by: paidBy,
-          value: amount,
-          description: description,
-        },
-      ]);
+      const { error } = await supabase.rpc("create_expense_with_signers", {
+        p_spending_group_id: groupId,
+        p_created_by: user.id,
+        p_paid_by: paidBy,
+        p_value: amount,
+        p_description: description,
+        p_member_ids: selectedPeople,
+      });
 
-      if (expenseError) throw expenseError;
+      if (error) throw error;
 
       closeModal();
     } catch (error) {
@@ -60,6 +59,7 @@ export function AddExpenseModal({
     setIsOpen(false);
     setAmount("");
     setDescription("");
+    setPaidBy("");
     setSelectedPeople([]);
   };
 
@@ -140,6 +140,7 @@ export function AddExpenseModal({
                 onChange={(e) => setPaidBy(e.target.value)}
                 className="w-full rounded-lg border px-3 py-2"
               >
+                <option value=""></option>
                 {members.map((p) => (
                   <option key={p.id} value={p.id}>
                     {getMemberName(p)}
@@ -189,7 +190,9 @@ export function AddExpenseModal({
 
             {/* Submit */}
             <button
-              disabled={!amount || !description || selectedPeople.length == 0}
+              disabled={
+                !amount || !description || !paidBy || selectedPeople.length == 0
+              }
               onClick={handleAddExpense}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
             >
