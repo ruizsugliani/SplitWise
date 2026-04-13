@@ -3,7 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { ArrowLeft, ReceiptText, Wallet, HandCoins } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal'
+import ExpensesClient from '@/components/expenses-client'
 import Link from 'next/link'
+import type { Expense as BaseExpense } from '@/app/types/expense'
 
 type MemberProfile = {
   id: string
@@ -23,12 +25,7 @@ type ExpenseSigner = {
   spending_group_members: Member | null
 }
 
-type Expense = {
-  id: string
-  description: string
-  value: number
-  created_at: string
-  paid_by: string
+type ExpenseWithSigners = BaseExpense & {
   expense_signer: ExpenseSigner[]
 }
 
@@ -38,7 +35,7 @@ type GroupQuery = {
   icon: string
   created_by: string
   members: Member[]
-  expenses: Expense[]
+  expenses: ExpenseWithSigners[]
 }
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -122,7 +119,7 @@ export default async function SpendingGroupDashboardPage({
     console.error('Error fetching expenses', expensesError)
   }
 
-  const expenses: Expense[] = (expensesData || []).map((raw) => {
+  const calcExpenses: ExpenseWithSigners[] = (expensesData || []).map((raw) => {
     const e = raw as Record<string, unknown>
     const signersRaw = Array.isArray(e.expense_signer)
       ? (e.expense_signer as unknown[])
@@ -167,11 +164,12 @@ export default async function SpendingGroupDashboardPage({
       created_at: (e.created_at as string | undefined) ?? '',
       paid_by: String(e.paid_by ?? ''),
       value: Number(e.value ?? 0),
+      split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
     }
   })
 
-  const totalExpenses = expenses.reduce((acc, e) => acc + e.value, 0)
+  const totalExpenses = calcExpenses.reduce((acc, e) => acc + e.value, 0)
 
   // Balances por miembro
   const balances: Record<string, number> = members.reduce((acc, m) => {
@@ -179,7 +177,7 @@ export default async function SpendingGroupDashboardPage({
     return acc
   }, {} as Record<string, number>)
 
-  expenses.forEach((expense) => {
+  calcExpenses.forEach((expense) => {
     const signers = expense.expense_signer || []
     const signerCount = signers.length || 1
     const share = expense.value / signerCount
@@ -223,16 +221,29 @@ export default async function SpendingGroupDashboardPage({
     if (creditor.amount < 0.01) c++
   }
 
-  const sortedExpenses = expenses
-    .slice()
-    .sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-
   const memberDisplay = (memberId: string) => {
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
+
+  // 3) Traemos listado plano para la UI de cards/borrado
+  const { data: expensesListData, error: expensesListError } = await supabase
+    .from('expenses_with_details')
+    .select('id, description, value, created_at, paid_by, split_between')
+    .eq('spending_group_id', id)
+
+  if (expensesListError) {
+    console.error('Error fetching expenses_with_details', expensesListError)
+  }
+
+  const expensesList: BaseExpense[] = (expensesListData || []).map((e) => ({
+    id: String(e.id),
+    description: (e.description as string) ?? '',
+    value: Number(e.value ?? 0),
+    created_at: (e.created_at as string) ?? '',
+    paid_by: (e.paid_by as string) ?? '',
+    split_between: Number(e.split_between ?? 0),
+  }))
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
@@ -270,7 +281,7 @@ export default async function SpendingGroupDashboardPage({
             <p className="text-sm text-zinc-400">Total gastado</p>
             <p className="text-3xl font-bold">{currencyFormatter.format(totalExpenses)}</p>
             <p className="text-xs text-zinc-500">
-              ({expenses.length} gasto{expenses.length === 1 ? '' : 's'})
+              ({calcExpenses.length} gasto{calcExpenses.length === 1 ? '' : 's'})
             </p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
@@ -334,49 +345,14 @@ export default async function SpendingGroupDashboardPage({
           )}
         </section>
 
-        <section>
+        <section className="mt-10">
           <div className="flex items-center gap-2 mb-3">
             <Wallet className="w-5 h-5 text-blue-400" />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
               Gastos recientes
             </h2>
           </div>
-          {sortedExpenses.length === 0 ? (
-            <div className="text-center py-12 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-3xl">
-              <p className="text-zinc-500 italic">
-                Aún no se han registrado gastos. Comienza agregando alguno!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {sortedExpenses.map((expense) => {
-                const payerName = memberDisplay(expense.paid_by)
-                const signerCount = expense.expense_signer?.length || 0
-                return (
-                  <div
-                    key={expense.id}
-                    className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-semibold">{expense.description}</span>
-                      <span className="text-xs text-zinc-500">
-                        Pagó {payerName} • {signerCount} participante
-                        {signerCount === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-white">
-                        {currencyFormatter.format(expense.value)}
-                      </span>
-                      <p className="text-[10px] text-zinc-500">
-                        {new Date(expense.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <ExpensesClient expenses={expensesList} />
         </section>
       </main>
     </div>
