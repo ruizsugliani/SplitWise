@@ -4,6 +4,7 @@ import { ArrowLeft, ReceiptText, Wallet, HandCoins } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
+import { AddExpenseModal } from '@/components/add-expense-modal'
 import Link from 'next/link'
 import type { Expense as BaseExpense } from '@/app/types/expense'
 
@@ -270,10 +271,7 @@ export default async function SpendingGroupDashboardPage({
             memberCount={members.length}
             creatorId={baseGroup.created_by}
           />
-          <button className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
-            <ReceiptText className="w-5 h-5" />
-            Agregar gasto
-          </button>
+          <AddExpenseModal groupId={id} members={members} />
         </div>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
