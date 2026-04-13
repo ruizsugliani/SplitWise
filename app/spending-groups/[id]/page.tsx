@@ -4,6 +4,8 @@ import { ArrowLeft, ReceiptText } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal' // NUEVO COMPONENTE
 import Link from 'next/link'
+import { AddExpenseModal } from '@/components/add-expense-modal'
+import ExpensesClient from '@/components/expenses-client'
 
 export default async function SpendingGroupDashboardPage({ 
   params 
@@ -17,7 +19,7 @@ export default async function SpendingGroupDashboardPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-const { data: group, error } = await supabase
+  const { data: group, error } = await supabase
     .from('spending_groups')
     .select(`
       *,
@@ -46,6 +48,11 @@ const { data: group, error } = await supabase
   const membersList = group.members || []
   const memberCount = membersList.length
 
+  const { data: expenses} = await supabase
+    .from("expenses_with_details")
+    .select("*")
+    .eq("spending_group_id", id)
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       {/* Header de Navegación... (igual) */}
@@ -67,10 +74,7 @@ const { data: group, error } = await supabase
             {/* Reemplazamos tu div estático por el nuevo Modal interactivo */}
             <MembersListModal groupId={id} members={membersList} memberCount={memberCount} creatorId={group.created_by} />
 
-            <button className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
-                <ReceiptText className="w-5 h-5" />
-                Agregar gasto
-            </button>
+            <AddExpenseModal groupId={id} members={membersList}/>
         </div>
 
         {/* Lista de Gastos... (igual) */}
@@ -78,9 +82,7 @@ const { data: group, error } = await supabase
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4 text-center md:text-left">
             Gastos recientes
           </h2>
-          <div className="text-center py-12 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-3xl">
-            <p className="text-zinc-500 italic">Aún no se han registrado gastos. Comienza agregando alguno!</p>
-          </div>
+          <ExpensesClient expenses={expenses} />
         </section>
       </main>
     </div>
