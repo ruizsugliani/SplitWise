@@ -3,12 +3,14 @@
 import { createClient } from "@/lib/supabase/client";
 import ExpenseList from "./ui/expense-list";
 import { useRouter } from "next/navigation";
+import { Expense } from "@/app/types/expense";
 
-export default function ExpensesClient({ expenses }: { expenses: any }) {
+export default function ExpensesClient({ expenses }: { expenses: Expense[] }) {
   const router = useRouter();
   const supabase = createClient();
+
   const handleDeleteExpense = async (id: string) => {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("expenses")
       .delete()
       .eq("id", id)

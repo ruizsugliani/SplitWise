@@ -5,6 +5,12 @@ import { CreateGroupModal } from '@/components/create-group-modal';
 import { LogoutButton } from '@/components/logout-button';
 import { ProfileButton } from '@/components/profile-button';
 
+const currencyFormatter = new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+})
+
 export default async function SpendingGroupsPage() {
     const supabase = await createClient()
     
@@ -23,7 +29,10 @@ export default async function SpendingGroupsPage() {
         id,
         name,
         icon,
-        spending_group_members(count)
+        spending_group_members(count),
+        expenses (
+            value
+        )
     `)
 
     if (groupsError) {
@@ -46,17 +55,24 @@ export default async function SpendingGroupsPage() {
 
                 <div className="space-y-4">
                     {groups && groups.length > 0 ? (
-                        groups.map((group) => (
-                            <SpendingGroupCard 
-                                key={group.id}
-                                id={group.id}
-                                name={group.name}
-                                icon={group.icon}
-                                members={group.spending_group_members[0]?.count || 0}
-                                expenses_count={0}
-                                total_amount="$ 0.00"
-                            />
-                        ))
+                        groups.map((group) => {
+                            const membersCount = group.spending_group_members?.[0]?.count || 0
+                            const expenses = group.expenses || []
+                            const expensesCount = expenses.length
+                            const totalAmount = expenses.reduce((acc: number, e: { value?: number | null }) => acc + Number(e.value || 0), 0)
+
+                            return (
+                                <SpendingGroupCard 
+                                    key={group.id}
+                                    id={group.id}
+                                    name={group.name}
+                                    icon={group.icon}
+                                    members={membersCount}
+                                    expenses_count={expensesCount}
+                                    total_amount={currencyFormatter.format(totalAmount)}
+                                />
+                            )
+                        })
                     ) : (
                         <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl">
                             <p className="text-zinc-500">No tienes grupos activos aún.</p>
