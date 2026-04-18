@@ -227,25 +227,6 @@ export default async function SpendingGroupDashboardPage({
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
 
-  // 3) Traemos listado plano para la UI de cards/borrado
-  const { data: expensesListData, error: expensesListError } = await supabase
-    .from('expenses_with_details')
-    .select('id, description, value, created_at, paid_by, split_between')
-    .eq('spending_group_id', id)
-
-  if (expensesListError) {
-    console.error('Error fetching expenses_with_details', expensesListError)
-  }
-
-  const expensesList: BaseExpense[] = (expensesListData || []).map((e) => ({
-    id: String(e.id),
-    description: (e.description as string) ?? '',
-    value: Number(e.value ?? 0),
-    created_at: (e.created_at as string) ?? '',
-    paid_by: (e.paid_by as string) ?? '',
-    split_between: Number(e.split_between ?? 0),
-  }))
-
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
@@ -350,7 +331,7 @@ export default async function SpendingGroupDashboardPage({
               Gastos recientes
             </h2>
           </div>
-          <ExpensesClient expenses={expensesList} />
+          <ExpensesClient groupId={id} members={members} expenses={calcExpenses} />
         </section>
       </main>
     </div>

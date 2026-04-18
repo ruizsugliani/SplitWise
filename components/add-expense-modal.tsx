@@ -1,54 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ReceiptText, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { Expense } from "@/app/types/expense";
+import ToastConfirm from "./ui/toast-confirmation";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
 };
 
+interface AddExpenseModalProps {
+  groupId: string;
+  members: Member[]; 
+  expenseToEdit?: Expense | null; 
+  onCloseExternal?: () => void;  
+  onSuccess?: (message: string) => void;
+}
+
 export function AddExpenseModal({
   groupId,
   members,
-}: {
-  groupId: string;
-  members: Member[];
-}) {
+  expenseToEdit = null,
+  onCloseExternal,
+  onSuccess
+}: AddExpenseModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-
+  const isEditing = !!expenseToEdit;
+  
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const router = useRouter();
   const supabase = createClient();
 
+  useEffect(() => {
+    if (expenseToEdit) {
+      setAmount(expenseToEdit.value.toString());
+      setDescription(expenseToEdit.description);
+      setPaidBy(expenseToEdit.paid_by || ""); 
+      setSelectedPeople(expenseToEdit.member_ids || [])
+      setIsOpen(true);
+    }
+  }, [expenseToEdit]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toastMessage])
+  
   const handleAddExpense = async () => {
+    setLoading(true)
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay usuario");
+      
+      if (isEditing) {
+        const { error } = await supabase.rpc("update_expense_with_signers", {
+          p_expense_id: expenseToEdit.id,
+          p_paid_by: paidBy,
+          p_value: parseFloat(amount),
+          p_description: description,
+          p_member_ids: selectedPeople,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("create_expense_with_signers", {
+          p_spending_group_id: groupId,
+          p_created_by: user.id,
+          p_paid_by: paidBy,
+          p_value: amount,
+          p_description: description,
+          p_member_ids: selectedPeople,
+        });
 
-      const { error } = await supabase.rpc("create_expense_with_signers", {
-        p_spending_group_id: groupId,
-        p_created_by: user.id,
-        p_paid_by: paidBy,
-        p_value: amount,
-        p_description: description,
-        p_member_ids: selectedPeople,
-      });
-
-      if (error) throw error;
-
+        if (error) throw error;
+    }
+      const successMsg = `Gasto ${isEditing ? "editado" : "guardado"} correctamente`;
       closeModal();
+      if (onSuccess) onSuccess(successMsg)
       router.refresh();
-    } catch (error) {
-      console.error("Error al crear gasto:", error);
-      alert("Hubo un error al crear gasto");
+    } catch (error: unknown) {
+      console.error("Error al procesar gasto:", error);
+      
+      let errorMessage = "Error desconocido";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } 
+      else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String((error as Record<string, unknown>).message);
+      } 
+      else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      alert(`Hubo un error al ${isEditing ? 'editar' : 'crear'} el gasto: ${errorMessage}`);
+    } finally {
+      setLoading(false)
     }
   };
 
@@ -64,6 +123,7 @@ export function AddExpenseModal({
     setDescription("");
     setPaidBy("");
     setSelectedPeople([]);
+    if (onCloseExternal) onCloseExternal();
   };
 
   // Calculation logic
@@ -72,13 +132,15 @@ export function AddExpenseModal({
   const perPersonAmount = numericAmount / splitCount;
   return (
     <>
-      <button
-        className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
-        onClick={() => setIsOpen(true)}
-      >
-        <ReceiptText className="w-5 h-5" />
-        Agregar gasto
-      </button>
+      {!onCloseExternal && (
+        <button
+          className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all active:scale-[0.98]"
+          onClick={() => setIsOpen(true)}
+        >
+          <ReceiptText className="w-5 h-5" />
+          Agregar gasto
+        </button>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -89,7 +151,9 @@ export function AddExpenseModal({
 
           <div className="relative bg-white text-black w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Agregar Gasto</h2>
+              <h2 className="text-xl font-bold">
+                {isEditing ? "Editar Gasto" : "Agregar Gasto"}
+              </h2>
               <button
                 onClick={closeModal}
                 className="text-zinc-400 hover:text-black transition-colors"
@@ -199,10 +263,13 @@ export function AddExpenseModal({
               onClick={handleAddExpense}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
             >
-              Confirmar
+              {loading ? "Guardando..." : "Confirmar"}
             </button>
           </div>
         </div>
+      )}
+      {toastMessage && (
+            <ToastConfirm toastMessage={toastMessage} />
       )}
     </>
   );
