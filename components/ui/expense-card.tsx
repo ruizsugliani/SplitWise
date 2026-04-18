@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { ConfirmModal } from "./confirm-modal";
 import { useRouter } from 'next/navigation'
 import { removeExpense } from "@/app/actions/expenses";
+import ToastConfirm from "./toast-confirmation";
 
 const formatDate = (dateString: string) => {
   return new Intl.DateTimeFormat("es-ES", {
@@ -39,7 +40,7 @@ export default function ExpenseCard({ expense }: { expense: Expense}) {
     const result = await removeExpense(id)
     
     if (result.success) {
-      setToastMessage("Miembro eliminado correctamente")
+      setToastMessage("Gasto eliminado correctamente")
       router.refresh()
     } else {
       alert("Error al borrar")
@@ -95,6 +96,10 @@ export default function ExpenseCard({ expense }: { expense: Expense}) {
         onConfirm={confirmDelete}
         onCancel={() => setExpenseToDelete(null)}
       />
+    )}
+
+    {toastMessage && (
+      <ToastConfirm toastMessage={toastMessage} />
     )}
     </div>
   );

@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 interface ConfirmModalProps {
   isOpen: boolean;
   title?: string;
-  description: ReactNode; // Usamos ReactNode para poder pasarle HTML (como negritas)
+  description: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
