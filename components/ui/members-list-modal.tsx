@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, Trash2, Edit2, Users, AlertTriangle } from 'lucide-react'
+import { Check, X, Trash2, Edit2, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { removeMember, updateGuestName } from '@/app/actions/members'
+import { ConfirmModal } from './confirm-modal'
 
 const getMemberInfo = (member: Member) => {
   const isGuest = !member.profiles;
@@ -224,37 +225,21 @@ export function MembersListModal({
 
       {/* 1. MODAL DE CONFIRMACIÓN (Sobre el anterior) */}
       {memberToDelete && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl max-w-xs w-full shadow-2xl text-center">
-            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">¿Estás seguro?</h3>
-            <p className="text-zinc-400 text-sm mb-6">
-              Vas a eliminar a <span className="text-white font-semibold">{getMemberInfo(memberToDelete).name}</span> de este grupo.
-            </p>
-            <div className="flex gap-3">
-              <button 
-                onClick={confirmDelete}
-                disabled={isDeleting === memberToDelete.id}
-                className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {isDeleting === memberToDelete.id ? (
-                  <span className="animate-pulse">Eliminando...</span>
-                ) : (
-                  "Eliminar"
-                )}
-              </button>
-              <button 
-                onClick={() => setMemberToDelete(null)}
-                disabled={isDeleting === memberToDelete.id}
-                className="flex-1 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal 
+          isOpen={memberToDelete !== null}
+          title="¿Estás seguro?"
+          description={
+            <>
+              Vas a eliminar a <span className="text-white font-semibold">
+                {memberToDelete ? getMemberInfo(memberToDelete).name : ''}
+              </span> de este grupo. Esta acción no se puede deshacer.
+            </>
+          }
+          confirmText="Eliminar"
+          isLoading={isDeleting === memberToDelete?.id}
+          onConfirm={confirmDelete}
+          onCancel={() => setMemberToDelete(null)}
+        />
       )}
 
       {/* 2. TOAST DE CONFIRMACIÓN (Notificación flotante) */}

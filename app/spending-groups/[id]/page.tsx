@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { ArrowLeft, ReceiptText, Wallet, HandCoins } from 'lucide-react'
+import { ArrowLeft, Wallet, HandCoins } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
@@ -275,14 +275,14 @@ export default async function SpendingGroupDashboardPage({
         </div>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 flex flex-col gap-2">
+          <div className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2">
             <p className="text-sm text-zinc-400">Total gastado</p>
             <p className="text-3xl font-bold">{currencyFormatter.format(totalExpenses)}</p>
             <p className="text-xs text-zinc-500">
               ({calcExpenses.length} gasto{calcExpenses.length === 1 ? '' : 's'})
             </p>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="rounded-3xl border border-white/10 bg-white/3 p-5">
             <p className="text-sm text-zinc-400 mb-2">Balances individuales</p>
             <div className="space-y-2">
               {members.map((m) => {
@@ -311,11 +311,11 @@ export default async function SpendingGroupDashboardPage({
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+        <section className="rounded-3xl border border-white/10 bg-white/3 p-5">
           <div className="flex items-center gap-2 mb-3">
             <HandCoins className="w-5 h-5 text-amber-400" />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Deudas sugeridas
+              Deudas
             </h2>
           </div>
           {settlements.length === 0 ? (
