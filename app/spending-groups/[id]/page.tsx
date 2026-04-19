@@ -57,6 +57,10 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+    
+  const { data: currenciesData, error: currenciesError } = await supabase.from('currencies').select('*');
+  console.log("MONEDAS DESDE SUPABASE:", currenciesData, "ERROR:", currenciesError);
+  const currencies = currenciesData || [];
 
   // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
   const { data: group, error } = await supabase
@@ -103,6 +107,7 @@ export default async function SpendingGroupDashboardPage({
         value,
         created_at,
         paid_by,
+        currency_id,
         expense_signer!expense_signer_expense_id_fkey (
           spending_group_member_id,
           spending_group_members (
@@ -167,6 +172,7 @@ export default async function SpendingGroupDashboardPage({
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
+      currency_id: String(e.currency_id ?? ''),
     }
   })
 
@@ -252,7 +258,7 @@ export default async function SpendingGroupDashboardPage({
             memberCount={members.length}
             creatorId={baseGroup.created_by}
           />
-          <AddExpenseModal groupId={id} members={members} />
+          <AddExpenseModal groupId={id} members={members} currencies={currencies} />
         </div>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -331,7 +337,7 @@ export default async function SpendingGroupDashboardPage({
               Gastos recientes
             </h2>
           </div>
-          <ExpensesClient groupId={id} members={members} expenses={calcExpenses} />
+          <ExpensesClient groupId={id} members={members} expenses={calcExpenses} currencies={currencies}/>
         </section>
       </main>
     </div>

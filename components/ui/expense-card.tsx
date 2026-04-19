@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { removeExpense } from "@/app/actions/expenses";
 import ToastConfirm from "./toast-confirmation";
 import { AddExpenseModal } from "../add-expense-modal";
+// import { format } from "path";
+import { formatCurrency } from "@/app/types/currency";
 
 const formatDate = (dateString: string) => {
   return new Intl.DateTimeFormat("es-ES", {
@@ -18,12 +20,14 @@ const formatDate = (dateString: string) => {
 };
 
 
-export default function ExpenseCard({ expense, groupId, members }: ExpenseProps) {
+export default function ExpenseCard({ expense, groupId, members, currencies }: ExpenseProps) {
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
+  const expenseCurrency = currencies.find(c => c.id === expense.currency_id);
+  const currencyCode = expenseCurrency?.code || 'ARS';
 
   useEffect(() => {
     if (toastMessage) {
@@ -67,7 +71,7 @@ export default function ExpenseCard({ expense, groupId, members }: ExpenseProps)
         <div className="flex items-start gap-3">
           <div className="text-right">
             <p className="font-semibold">
-              ${expense.value.toFixed(2)}
+              {formatCurrency(expense.value, currencyCode)}
             </p>
           </div>
           <button
@@ -122,6 +126,7 @@ export default function ExpenseCard({ expense, groupId, members }: ExpenseProps)
         }}
         onCloseExternal={() => setIsEditing(false)}
         onSuccess={(msg) => setToastMessage(msg)}
+        currencies={currencies}
       />
     )}
 

@@ -4,7 +4,7 @@ import ExpenseList from "./ui/expense-list";
 import { ExpensesProps } from "@/app/types/expense";
 
 
-export default function ExpensesClient({ expenses, groupId, members }: ExpensesProps ) {
+export default function ExpensesClient({ expenses, groupId, members, currencies }: ExpensesProps ) {
   if (!expenses || !expenses.length) {
     return (
       <div className="text-center text-gray-500 py-10 border rounded-xl">
@@ -13,5 +13,5 @@ export default function ExpensesClient({ expenses, groupId, members }: ExpensesP
     );
   }
 
-  return <ExpenseList expenses={expenses} groupId={groupId} members={members} />;
+  return <ExpenseList expenses={expenses} groupId={groupId} members={members} currencies={currencies} />;
 }

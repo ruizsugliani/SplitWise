@@ -1,3 +1,5 @@
+import { Currency } from "./currency"
+
 export interface Expense {
   id: string
   paid_by: string
@@ -7,15 +9,18 @@ export interface Expense {
   split_between: number
   expense_signer?: { spending_group_member_id: string }[];
   member_ids?: string[];
+  currency_id: string;
 }
 export interface ExpensesProps {
   expenses: Expense[],
   groupId: string,
-  members: Member[]
+  members: Member[];
+  currencies: Currency[];
 }
 
 export interface ExpenseProps {
   expense: Expense,
   groupId: string,
-  members: Member[]
+  members: Member[];
+  currencies: Currency[];
 }

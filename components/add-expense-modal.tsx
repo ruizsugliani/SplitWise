@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Expense } from "@/app/types/expense";
 import ToastConfirm from "./ui/toast-confirmation";
+import { Currency } from "@/app/types/currency";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
@@ -14,6 +15,7 @@ const getMemberName = (member: Member) => {
 interface AddExpenseModalProps {
   groupId: string;
   members: Member[]; 
+  currencies: Currency[];
   expenseToEdit?: Expense | null; 
   onCloseExternal?: () => void;  
   onSuccess?: (message: string) => void;
@@ -22,6 +24,7 @@ interface AddExpenseModalProps {
 export function AddExpenseModal({
   groupId,
   members,
+  currencies,
   expenseToEdit = null,
   onCloseExternal,
   onSuccess
@@ -34,6 +37,7 @@ export function AddExpenseModal({
   const [paidBy, setPaidBy] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currencyId, setCurrencyId] = useState("");
 
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -45,10 +49,13 @@ export function AddExpenseModal({
       setAmount(expenseToEdit.value.toString());
       setDescription(expenseToEdit.description);
       setPaidBy(expenseToEdit.paid_by || ""); 
-      setSelectedPeople(expenseToEdit.member_ids || [])
+      setSelectedPeople(expenseToEdit.member_ids || []);
+      setCurrencyId(expenseToEdit.currency_id || "");
       setIsOpen(true);
+    } else if (currencies.length > 0) {
+      setCurrencyId(currencies[0].id);
     }
-  }, [expenseToEdit]);
+  }, [expenseToEdit, currencies]);
 
   useEffect(() => {
     if (toastMessage) {
@@ -72,6 +79,7 @@ export function AddExpenseModal({
           p_value: parseFloat(amount),
           p_description: description,
           p_member_ids: selectedPeople,
+          p_currency_id: currencyId,
         });
         if (error) throw error;
       } else {
@@ -82,6 +90,7 @@ export function AddExpenseModal({
           p_value: amount,
           p_description: description,
           p_member_ids: selectedPeople,
+          p_currency_id: currencyId,
         });
 
         if (error) throw error;
@@ -181,7 +190,23 @@ export function AddExpenseModal({
                 </div>
               </div>
             </div>
-
+            {/* Currency Select */}
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-gray-600">
+                Moneda
+              </label>
+              <select
+                value={currencyId}
+                onChange={(e) => setCurrencyId(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 bg-white"
+              >
+                {currencies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
             {/* Description */}
             <div className="mb-4">
               <label className="text-sm font-bold block mb-2 text-gray-700">
@@ -258,7 +283,7 @@ export function AddExpenseModal({
             {/* Submit */}
             <button
               disabled={
-                !amount || !description || !paidBy || selectedPeople.length == 0
+                !amount || !description || !paidBy || !currencyId || selectedPeople.length == 0
               }
               onClick={handleAddExpense}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
