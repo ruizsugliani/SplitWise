@@ -7,6 +7,7 @@ import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import Link from 'next/link'
 import type { Expense as BaseExpense } from '@/app/types/expense'
+import { EditGroupModal } from '@/components/edit-group-modal'
 
 type MemberProfile = {
   id: string
@@ -259,7 +260,11 @@ export default async function SpendingGroupDashboardPage({
           <span className="text-4xl mb-2">{baseGroup.icon}</span>
           <h1 className="text-2xl font-bold">{baseGroup.name}</h1>
         </div>
-        <div className="w-10" />
+        <EditGroupModal 
+          groupId={id} 
+          initialName={baseGroup.name} 
+          initialIcon={baseGroup.icon} 
+        />
       </header>
 
       <main className="max-w-2xl mx-auto space-y-8">
