@@ -5,7 +5,6 @@ import { EMOJIS } from '@/data/features'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Cog } from 'lucide-react'
-// Asegúrate de que esta ruta sea correcta según tu estructura de carpetas
 import { ConfirmModal } from '@/components/ui/confirm-modal' 
 
 interface EditGroupModalProps {
@@ -83,7 +82,7 @@ export function EditGroupModal({ groupId, initialName, initialIcon }: EditGroupM
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setIsOpen(false); setSelectedEmoji(initialIcon); setGroupName(initialName) } } />
           
           <div className="relative bg-white text-black w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-start mb-6">

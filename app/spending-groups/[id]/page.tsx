@@ -58,6 +58,15 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+  
+  // Por ahora queremos saber si el usuario es quien creó el grupo para mostrar el botón que permite editarlo.
+  const { data: group_reg } = await supabase
+    .from('spending_groups')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  const isCreator = user?.id === group_reg?.created_by;
 
   // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
   const { data: group, error } = await supabase
@@ -249,22 +258,30 @@ export default async function SpendingGroupDashboardPage({
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
-        <Link
-          href="/spending-groups"
-          className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
+      <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center mb-8 pt-4">
+        <div className="flex justify-start">
+          <Link
+            href="/spending-groups"
+            className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </Link>
+        </div>
+
         <div className="flex flex-col items-center">
           <span className="text-4xl mb-2">{baseGroup.icon}</span>
           <h1 className="text-2xl font-bold">{baseGroup.name}</h1>
         </div>
-        <EditGroupModal 
-          groupId={id} 
-          initialName={baseGroup.name} 
-          initialIcon={baseGroup.icon} 
-        />
+
+        <div className="flex justify-end">
+          {isCreator && (
+            <EditGroupModal 
+              groupId={id} 
+              initialName={group.name} 
+              initialIcon={group.icon} 
+            />
+          )}
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto space-y-8">
