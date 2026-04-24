@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Expense } from "@/app/types/expense";
 import ToastConfirm from "./ui/toast-confirmation";
 import { Currency } from "@/app/types/currency";
+import { Member } from "@/app/types/member";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
