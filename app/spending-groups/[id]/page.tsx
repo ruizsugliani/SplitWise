@@ -6,29 +6,11 @@ import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import Link from 'next/link'
-import type { Expense as BaseExpense } from '@/app/types/expense'
+import { formatCurrency } from '@/app/types/currency'
+import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
+import { Member, MemberProfile } from '@/app/types/member'
+import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
 
-type MemberProfile = {
-  id: string
-  full_name: string | null
-  avatar_url: string | null
-}
-
-type Member = {
-  id: string
-  member_name: string
-  profile_id: string | null
-  profiles: MemberProfile | null
-}
-
-type ExpenseSigner = {
-  spending_group_member_id: string
-  spending_group_members: Member | null
-}
-
-type ExpenseWithSigners = BaseExpense & {
-  expense_signer: ExpenseSigner[]
-}
 
 type GroupQuery = {
   id: string
@@ -38,12 +20,6 @@ type GroupQuery = {
   members: Member[]
   expenses: ExpenseWithSigners[]
 }
-
-const currencyFormatter = new Intl.NumberFormat('es-AR', {
-  style: 'currency',
-  currency: 'ARS',
-  minimumFractionDigits: 2,
-})
 
 export default async function SpendingGroupDashboardPage({
   params,
@@ -57,6 +33,13 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+    
+  const { data: currenciesData, error: currenciesError } = await supabase.from('currencies').select('*');
+  if (currenciesError) {
+    console.error('Error fetching currencies', currenciesError);
+  }
+  const currencies = currenciesData || [];
+  const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
 
   // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
   const { data: group, error } = await supabase
@@ -103,6 +86,7 @@ export default async function SpendingGroupDashboardPage({
         value,
         created_at,
         paid_by,
+        currency_id,
         expense_signer!expense_signer_expense_id_fkey (
           spending_group_member_id,
           spending_group_members (
@@ -167,84 +151,23 @@ export default async function SpendingGroupDashboardPage({
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
+      currency_id: String(e.currency_id || defaultCurrencyId),
     }
   })
 
-  const totalExpenses = calcExpenses.reduce((acc, e) => acc + e.value, 0)
 
-  // Balances por miembro
-  const balances: Record<string, number> = members.reduce((acc, m) => {
-    acc[m.id] = 0
-    return acc
-  }, {} as Record<string, number>)
+  const { 
+    totalsByCurrency, 
+    balancesByCurrency, 
+    settlements 
+  } = calculateGroupDebts(calcExpenses, members, currencies);
 
-  calcExpenses.forEach((expense) => {
-    const signers = expense.expense_signer || []
-    const signerCount = signers.length || 1
-    const share = expense.value / signerCount
-
-    // Todos los signers deben su parte
-    signers.forEach((signer) => {
-      const memberId = signer.spending_group_member_id
-      if (balances[memberId] === undefined) balances[memberId] = 0
-      balances[memberId] -= share
-    })
-
-    // Quien pagó recibe el total
-    if (balances[expense.paid_by] === undefined) balances[expense.paid_by] = 0
-    balances[expense.paid_by] += expense.value
-  })
-
-  type Settlement = { from: string; to: string; amount: number }
-  const settlements: Settlement[] = []
-  const debtors = Object.entries(balances)
-    .filter(([, v]) => v < -0.009)
-    .map(([id, v]) => ({ id, amount: v }))
-    .sort((a, b) => a.amount - b.amount) // más deuda primero (más negativo)
-  const creditors = Object.entries(balances)
-    .filter(([, v]) => v > 0.009)
-    .map(([id, v]) => ({ id, amount: v }))
-    .sort((a, b) => b.amount - a.amount) // más a favor primero
-
-  let d = 0
-  let c = 0
-  while (d < debtors.length && c < creditors.length) {
-    const debtor = debtors[d]
-    const creditor = creditors[c]
-    const pay = Math.min(creditor.amount, -debtor.amount)
-
-    settlements.push({ from: debtor.id, to: creditor.id, amount: pay })
-
-    debtor.amount += pay // menos negativo
-    creditor.amount -= pay
-
-    if (Math.abs(debtor.amount) < 0.01) d++
-    if (creditor.amount < 0.01) c++
-  }
+  const getCurrencyCode = (id: string) => currencies.find(c => c.id === id)?.code || 'ARS';
 
   const memberDisplay = (memberId: string) => {
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
-
-  // 3) Traemos listado plano para la UI de cards/borrado
-  const { data: expensesListData, error: expensesListError } = await supabase
-    .from('expenses_with_details')
-    .select('id, description, value, created_at, paid_by, split_between')
-    .eq('spending_group_id', id)
-
-  if (expensesListError) {
-    console.error('Error fetching expenses_with_details', expensesListError)
-  }
-
-  const expensesList: BaseExpense[] = (expensesListData || []).map((e) => ({
-    id: String(e.id),
-    description: (e.description as string) ?? '',
-    value: Number(e.value ?? 0),
-    created_at: (e.created_at as string) ?? '',
-    paid_by: (e.paid_by as string) ?? '',
-    split_between: Number(e.split_between ?? 0),
-  }))
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
@@ -271,13 +194,22 @@ export default async function SpendingGroupDashboardPage({
             memberCount={members.length}
             creatorId={baseGroup.created_by}
           />
-          <AddExpenseModal groupId={id} members={members} />
+          <AddExpenseModal groupId={id} members={members} currencies={currencies} />
         </div>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2 h-fit">
           <div className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2">
             <p className="text-sm text-zinc-400">Total gastado</p>
-            <p className="text-3xl font-bold">{currencyFormatter.format(totalExpenses)}</p>
+            <div className="flex flex-col gap-1">
+              {Object.entries(totalsByCurrency).map(([currId, total]) => (
+                <p key={currId} className="text-2xl font-bold">
+                  {formatCurrency(total, getCurrencyCode(currId))}
+                </p>
+              ))}
+              {Object.keys(totalsByCurrency).length === 0 && (
+                <p className="text-2xl font-bold">$0.00</p>
+              )}
+            </div>
             <p className="text-xs text-zinc-500">
               ({calcExpenses.length} gasto{calcExpenses.length === 1 ? '' : 's'})
             </p>
@@ -286,24 +218,33 @@ export default async function SpendingGroupDashboardPage({
             <p className="text-sm text-zinc-400 mb-2">Balances individuales</p>
             <div className="space-y-2">
               {members.map((m) => {
-                const balance = balances[m.id] || 0
-                const positive = balance >= 0
+                const userBalances = balancesByCurrency[m.id] || {};
+                const activeCurrencies = Object.entries(userBalances).filter(([, val]) => Math.abs(val) > 0.01);
                 return (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-3 py-2"
-                  >
-                    <span className="text-sm">
+                  <div key={m.id} className="rounded-2xl bg-zinc-900/60 px-3 py-2 border border-white/5">
+                    <span className="text-sm font-medium text-white">
                       {m.profiles?.full_name || m.member_name}
                     </span>
-                    <span
-                      className={`text-sm font-semibold ${
-                        positive ? 'text-emerald-400' : 'text-red-400'
-                      }`}
-                    >
-                      {positive ? 'A favor ' : 'Debe '}
-                      {currencyFormatter.format(Math.abs(balance))}
-                    </span>
+                    {activeCurrencies.length === 0 ? (
+                      <div className="text-xs text-zinc-500 mt-1">Al día</div>
+                    ) : (
+                      <div className="mt-2 flex flex-col gap-1">
+                        {activeCurrencies.map(([currId, balance]) => {
+                          const positive = balance >= 0;
+                          return (
+                            <div key={currId} className="flex justify-between items-center bg-black/20 rounded px-2 py-1">
+                              <span className="text-[10px] uppercase font-bold text-zinc-500">
+                                {getCurrencyCode(currId)}
+                              </span>
+                              <span className={`text-xs font-semibold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {positive ? 'A favor ' : 'Debe '}
+                                {formatCurrency(Math.abs(balance), getCurrencyCode(currId))}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -311,32 +252,35 @@ export default async function SpendingGroupDashboardPage({
           </div>
         </section>
 
+        {/* SECCIÓN DE DEUDAS EXACTAS (Settlements) */}
         <section className="rounded-3xl border border-white/10 bg-white/3 p-5">
           <div className="flex items-center gap-2 mb-3">
             <HandCoins className="w-5 h-5 text-amber-400" />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Deudas
+              Transferencias Sugeridas
             </h2>
           </div>
           {settlements.length === 0 ? (
             <p className="text-zinc-500 text-sm">
-              No hay deudas pendientes. Agregá gastos para calcular balances.
+              No hay deudas pendientes directas entre usuarios.
             </p>
           ) : (
             <div className="space-y-2">
               {settlements.map((s, idx) => (
                 <div
-                  key={`${s.from}-${s.to}-${idx}`}
+                  key={`${s.from}-${s.to}-${s.currency_id}-${idx}`}
                   className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
                 >
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-red-300 font-medium">{memberDisplay(s.from)}</span>
-                    <span className="text-zinc-500">le debe a</span>
+                    <span className="text-zinc-500 text-xs">le debe a</span>
                     <span className="text-emerald-300 font-medium">{memberDisplay(s.to)}</span>
                   </div>
-                  <span className="text-sm font-semibold text-white">
-                    {currencyFormatter.format(s.amount)}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm font-bold text-white">
+                      {formatCurrency(s.amount, getCurrencyCode(s.currency_id))}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -350,7 +294,7 @@ export default async function SpendingGroupDashboardPage({
               Gastos recientes
             </h2>
           </div>
-          <ExpensesClient expenses={expensesList} />
+          <ExpensesClient groupId={id} members={members} expenses={calcExpenses} currencies={currencies}/>
         </section>
       </main>
     </div>
