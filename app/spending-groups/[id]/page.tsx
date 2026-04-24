@@ -197,7 +197,7 @@ export default async function SpendingGroupDashboardPage({
           <AddExpenseModal groupId={id} members={members} currencies={currencies} />
         </div>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2 h-fit">
           <div className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2">
             <p className="text-sm text-zinc-400">Total gastado</p>
             <div className="flex flex-col gap-1">
