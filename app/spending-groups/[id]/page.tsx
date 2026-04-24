@@ -6,30 +6,11 @@ import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import Link from 'next/link'
-import type { Expense as BaseExpense } from '@/app/types/expense'
 import { formatCurrency } from '@/app/types/currency'
+import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
+import { Member, MemberProfile } from '@/app/types/member'
+import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
 
-type MemberProfile = {
-  id: string
-  full_name: string | null
-  avatar_url: string | null
-}
-
-type Member = {
-  id: string
-  member_name: string
-  profile_id: string | null
-  profiles: MemberProfile | null
-}
-
-type ExpenseSigner = {
-  spending_group_member_id: string
-  spending_group_members: Member | null
-}
-
-type ExpenseWithSigners = BaseExpense & {
-  expense_signer: ExpenseSigner[]
-}
 
 type GroupQuery = {
   id: string
@@ -58,6 +39,7 @@ export default async function SpendingGroupDashboardPage({
     console.error('Error fetching currencies', currenciesError);
   }
   const currencies = currenciesData || [];
+  const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
 
   // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
   const { data: group, error } = await supabase
@@ -169,81 +151,18 @@ export default async function SpendingGroupDashboardPage({
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
-      currency_id: String(e.currency_id ?? ''),
+      currency_id: String(e.currency_id || defaultCurrencyId),
     }
   })
 
-// Helper para obtener el código de moneda ('ARS', 'USD')
+
+  const { 
+    totalsByCurrency, 
+    balancesByCurrency, 
+    settlements 
+  } = calculateGroupDebts(calcExpenses, members, currencies);
+
   const getCurrencyCode = (id: string) => currencies.find(c => c.id === id)?.code || 'ARS';
-
-  // 1. Totales gastados por moneda
-  const totalsByCurrency: Record<string, number> = {};
-  calcExpenses.forEach(e => {
-    totalsByCurrency[e.currency_id] = (totalsByCurrency[e.currency_id] || 0) + e.value;
-  });
-
-  // 2. Balances netos por usuario Y por moneda (Para la tarjeta de resumen individual)
-  const balancesByCurrency: Record<string, Record<string, number>> = {};
-  members.forEach(m => balancesByCurrency[m.id] = {});
-
-  calcExpenses.forEach(expense => {
-    const curr = expense.currency_id;
-    const creditor = expense.paid_by;
-    const signers = expense.expense_signer || [];
-    const share = expense.value / (signers.length || 1);
-
-    signers.forEach(signer => {
-      const debtor = signer.spending_group_member_id;
-      balancesByCurrency[debtor][curr] = (balancesByCurrency[debtor][curr] || 0) - share;
-    });
-    // El que pagó recupera el total (menos su propia parte que ya se restó arriba si era signer)
-    balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + expense.value;
-  });
-
-  // 3. Deudas Directas Exactas (Sin simplificación a terceros)
-  // Estructura: debts[Deudor][Acreedor][Moneda] = Monto
-  const directDebts: Record<string, Record<string, Record<string, number>>> = {};
-  members.forEach(m => {
-    directDebts[m.id] = {};
-    members.forEach(m2 => { if (m.id !== m2.id) directDebts[m.id][m2.id] = {}; });
-  });
-
-  calcExpenses.forEach(expense => {
-    const curr = expense.currency_id;
-    const creditor = expense.paid_by;
-    const signers = expense.expense_signer || [];
-    const share = expense.value / (signers.length || 1);
-
-    signers.forEach(signer => {
-      const debtor = signer.spending_group_member_id;
-      if (debtor !== creditor) { // No me debo a mí mismo
-        directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + share;
-      }
-    });
-  });
-
-  // 4. Cancelación Mutua Directa (Si X le debe a Y $100, e Y le debe a X $40 -> X le debe a Y $60)
-  type Settlement = { from: string; to: string; amount: number; currency_id: string };
-  const settlements: Settlement[] = [];
-
-  members.forEach(m1 => {
-    members.forEach(m2 => {
-      // Usamos >= para procesar cada par (m1, m2) una sola vez y no duplicar
-      if (m1.id >= m2.id) return; 
-
-      currencies.forEach(c => {
-        const curr = c.id;
-        const m1OwesM2 = directDebts[m1.id]?.[m2.id]?.[curr] || 0;
-        const m2OwesM1 = directDebts[m2.id]?.[m1.id]?.[curr] || 0;
-
-        if (m1OwesM2 > m2OwesM1) {
-          settlements.push({ from: m1.id, to: m2.id, amount: m1OwesM2 - m2OwesM1, currency_id: curr });
-        } else if (m2OwesM1 > m1OwesM2) {
-          settlements.push({ from: m2.id, to: m1.id, amount: m2OwesM1 - m1OwesM2, currency_id: curr });
-        }
-      });
-    });
-  });
 
   const memberDisplay = (memberId: string) => {
     const member = membersById.get(memberId)

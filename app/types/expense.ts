@@ -1,4 +1,5 @@
 import { Currency } from "./currency"
+import { Member } from "./member"
 
 export interface Expense {
   id: string
@@ -23,4 +24,13 @@ export interface ExpenseProps {
   groupId: string,
   members: Member[];
   currencies: Currency[];
+}
+
+export type ExpenseSigner = {
+  spending_group_member_id: string
+  spending_group_members: Member | null
+}
+
+export type ExpenseWithSigners = Expense & {
+  expense_signer: ExpenseSigner[]
 }
