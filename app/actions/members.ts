@@ -56,6 +56,50 @@ export async function removeMember(memberId: string) {
   return { success: true }
 }
 
+export async function linkMemberToProfile(memberId: string, email: string) {
+  const supabase = await createClient()
+
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email.trim())
+      .single()
+
+    if (profileError || !profile) {
+      return { success: false, error: "No se encontró ninguna cuenta con este email." }
+    }
+
+    const { data: member, error: memberError } = await supabase
+      .from('spending_group_members')
+      .select('spending_group_id')
+      .eq('id', memberId)
+      .single()
+
+    if (memberError || !member) {
+      return { success: false, error: "No se encontró el miembro." }
+    }
+
+    const { error: updateError } = await supabase
+      .from('spending_group_members')
+      .update({ profile_id: profile.id })
+      .eq('id', memberId)
+
+    if (updateError) {
+      if (updateError.code === '23505') {
+        return { success: false, error: "Esta cuenta ya es miembro del grupo." }
+      }
+      throw updateError
+    }
+
+    revalidatePath('/spending-groups/[id]', 'page')
+    return { success: true }
+  } catch (error) {
+    console.error("Error al vincular miembro:", error)
+    return { success: false, error: "No se pudo vincular la cuenta." }
+  }
+}
+
 export async function updateGuestName(memberId: string, newName: string) {
   const supabase = await createClient()
 

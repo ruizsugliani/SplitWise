@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ArrowLeft, Wallet, HandCoins } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
+import { CopyReminderButton } from '@/components/ui/copy-reminder-button'
 import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
@@ -12,6 +13,7 @@ type MemberProfile = {
   id: string
   full_name: string | null
   avatar_url: string | null
+  email: string | null
 }
 
 type Member = {
@@ -71,7 +73,7 @@ export default async function SpendingGroupDashboardPage({
           id,
           member_name,
           profile_id,
-          profiles ( id, full_name, avatar_url )
+          profiles ( id, full_name, avatar_url, email )
         )
       `
     )
@@ -109,7 +111,7 @@ export default async function SpendingGroupDashboardPage({
             id,
             member_name,
             profile_id,
-            profiles ( id, full_name, avatar_url )
+            profiles ( id, full_name, avatar_url, email )
           )
         )
       `
@@ -140,6 +142,7 @@ export default async function SpendingGroupDashboardPage({
             id: String(profileObj.id ?? ''),
             full_name: (profileObj.full_name as string | null | undefined) ?? null,
             avatar_url: (profileObj.avatar_url as string | null | undefined) ?? null,
+            email: (profileObj.email as string | null | undefined) ?? null,
           }
         : null
 
@@ -324,21 +327,29 @@ export default async function SpendingGroupDashboardPage({
             </p>
           ) : (
             <div className="space-y-2">
-              {settlements.map((s, idx) => (
-                <div
-                  key={`${s.from}-${s.to}-${idx}`}
-                  className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-red-300 font-medium">{memberDisplay(s.from)}</span>
-                    <span className="text-zinc-500">le debe a</span>
-                    <span className="text-emerald-300 font-medium">{memberDisplay(s.to)}</span>
+              {settlements.map((s, idx) => {
+                const debtorName = memberDisplay(s.from)
+                const creditorName = memberDisplay(s.to)
+                const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${currencyFormatter.format(s.amount)} a ${creditorName} en el grupo ${baseGroup.name} 💸`
+                return (
+                  <div
+                    key={`${s.from}-${s.to}-${idx}`}
+                    className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-red-300 font-medium">{debtorName}</span>
+                      <span className="text-zinc-500">le debe a</span>
+                      <span className="text-emerald-300 font-medium">{creditorName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-white">
+                        {currencyFormatter.format(s.amount)}
+                      </span>
+                      <CopyReminderButton message={reminderMessage} />
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold text-white">
-                    {currencyFormatter.format(s.amount)}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
