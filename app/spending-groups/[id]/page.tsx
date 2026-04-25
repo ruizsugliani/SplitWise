@@ -5,6 +5,7 @@ import { AddMemberModal } from '@/components/add-member-modal'
 import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
+import { CloseGroupButton } from '@/components/close-group-button'
 import Link from 'next/link'
 import { formatCurrency } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
@@ -17,6 +18,7 @@ type GroupQuery = {
   name: string
   icon: string
   created_by: string
+  closed_at: string | null
   members: Member[]
   expenses: ExpenseWithSigners[]
 }
@@ -50,6 +52,7 @@ export default async function SpendingGroupDashboardPage({
         name,
         icon,
         created_by,
+        closed_at,
         members:spending_group_members (
           id,
           member_name,
@@ -73,6 +76,10 @@ export default async function SpendingGroupDashboardPage({
   }
 
   const baseGroup = group as unknown as GroupQuery
+  if (baseGroup.closed_at) {
+    redirect('/spending-groups')
+  }
+
   const members = baseGroup.members || []
   const membersById = new Map(members.map((m) => [m.id, m]))
 
@@ -169,6 +176,8 @@ export default async function SpendingGroupDashboardPage({
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
 
+  const isCreator = user.id === baseGroup.created_by
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
@@ -195,6 +204,7 @@ export default async function SpendingGroupDashboardPage({
             creatorId={baseGroup.created_by}
           />
           <AddExpenseModal groupId={id} members={members} currencies={currencies} />
+          <CloseGroupButton groupId={id} isClosed={false} isCreator={isCreator} />
         </div>
 
         <section className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2 h-fit">
