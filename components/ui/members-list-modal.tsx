@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { removeMember, updateGuestName } from '@/app/actions/members'
 import { ConfirmModal } from './confirm-modal'
 import ToastConfirm  from './toast-confirmation'
+import type { Member } from '@/app/types/member'
 
 const getMemberInfo = (member: Member) => {
   const isGuest = !member.profiles;
