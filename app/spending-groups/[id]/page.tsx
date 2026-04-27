@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ArrowLeft, Wallet, HandCoins } from 'lucide-react'
 import { AddMemberModal } from '@/components/add-member-modal'
+import { CopyReminderButton } from '@/components/ui/copy-reminder-button'
 import { MembersListModal } from '@/components/ui/members-list-modal'
 import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
@@ -11,6 +12,7 @@ import { formatCurrency } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
 import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
+import { EditGroupModal } from '@/components/edit-group-modal'
 
 
 type GroupQuery = {
@@ -43,7 +45,7 @@ export default async function SpendingGroupDashboardPage({
   const currencies = currenciesData || [];
   const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
 
-  // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
+  // 1) Traemos grupo y miembros
   const { data: group, error } = await supabase
     .from('spending_groups')
     .select(
@@ -57,7 +59,7 @@ export default async function SpendingGroupDashboardPage({
           id,
           member_name,
           profile_id,
-          profiles ( id, full_name, avatar_url )
+          profiles ( id, full_name, avatar_url, email )
         )
       `
     )
@@ -83,28 +85,33 @@ export default async function SpendingGroupDashboardPage({
   const members = baseGroup.members || []
   const membersById = new Map(members.map((m) => [m.id, m]))
 
-  // 2) Traemos gastos + signers por separado; si falla, seguimos con lista vacía
+  // 2) Traemos gastos + signers por separado
   const { data: expensesData, error: expensesError } = await supabase
     .from('expenses')
-    .select(
-      `
+    .select(`
+      id,
+      description,
+      value,
+      created_at,
+      paid_by,
+      currency_id,
+      spending_group_members!expendings_paid_by_fkey (
+        member_name,
+        profiles ( full_name )
+      ),
+  expense_signer!expense_signer_expense_id_fkey (
         id,
-        description,
-        value,
-        created_at,
-        paid_by,
-        currency_id,
-        expense_signer!expense_signer_expense_id_fkey (
-          spending_group_member_id,
-          spending_group_members (
-            id,
-            member_name,
-            profile_id,
-            profiles ( id, full_name, avatar_url )
-          )
+        spending_group_member_id,
+        amount_due,
+        payments ( amount ),
+        spending_group_members (
+          id,
+          member_name,
+          profile_id,
+          profiles ( id, full_name, avatar_url, email )
         )
-      `
-    )
+      )
+    `)
     .eq('spending_group_id', id)
 
   if (expensesError) {
@@ -116,6 +123,13 @@ export default async function SpendingGroupDashboardPage({
     const signersRaw = Array.isArray(e.expense_signer)
       ? (e.expense_signer as unknown[])
       : []
+
+    const payerRaw = e.spending_group_members;
+    const payerObj = Array.isArray(payerRaw) 
+      ? payerRaw[0] 
+      : (payerRaw as { member_name?: string; profiles?: { full_name?: string } } | null);
+      
+    const paidByName = payerObj?.member_name || payerObj?.profiles?.full_name || 'Desconocido';
 
     const normalizeMember = (m: unknown): Member | null => {
       if (!m) return null
@@ -131,6 +145,7 @@ export default async function SpendingGroupDashboardPage({
             id: String(profileObj.id ?? ''),
             full_name: (profileObj.full_name as string | null | undefined) ?? null,
             avatar_url: (profileObj.avatar_url as string | null | undefined) ?? null,
+            email: (profileObj.email as string | null | undefined) ?? null,
           }
         : null
 
@@ -142,11 +157,24 @@ export default async function SpendingGroupDashboardPage({
       }
     }
 
-    const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
-      const es = esRaw as Record<string, unknown>
+const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
+      const es = esRaw as { 
+        id?: string; 
+        spending_group_member_id?: string; 
+        spending_group_members?: unknown; 
+        amount_due?: number; 
+        payments?: { amount?: number | string }[] 
+      };
+      
+      const payments = Array.isArray(es.payments) ? es.payments : [];
+      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
       return {
+        id: String(es.id ?? ''),
         spending_group_member_id: String(es.spending_group_member_id ?? ''),
         spending_group_members: normalizeMember(es.spending_group_members),
+        amount_due: Number(es.amount_due ?? 0),
+        total_paid: totalPaid,
       }
     })
 
@@ -155,6 +183,7 @@ export default async function SpendingGroupDashboardPage({
       description: (e.description as string | undefined) ?? '',
       created_at: (e.created_at as string | undefined) ?? '',
       paid_by: String(e.paid_by ?? ''),
+      paid_by_member_name: paidByName,
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
@@ -162,6 +191,12 @@ export default async function SpendingGroupDashboardPage({
     }
   })
 
+const expensesForClient = calcExpenses.map((e) => ({
+    ...e,
+    currentUserSigner: e.expense_signer.find(
+      (s) => s.spending_group_members?.profile_id === user.id
+    ) || null
+  })) as ExpenseWithSigners[];
 
   const { 
     totalsByCurrency, 
@@ -175,23 +210,33 @@ export default async function SpendingGroupDashboardPage({
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
-
-  const isCreator = user.id === baseGroup.created_by
-
+  const isCreator = user.id === baseGroup.created_by;
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
-        <Link
-          href="/spending-groups"
-          className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
+      <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center mb-8 pt-4">
+        <div className="flex justify-start">
+          <Link
+            href="/spending-groups"
+            className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </Link>
+        </div>
+
         <div className="flex flex-col items-center">
           <span className="text-4xl mb-2">{baseGroup.icon}</span>
           <h1 className="text-2xl font-bold">{baseGroup.name}</h1>
         </div>
-        <div className="w-10" />
+
+        <div className="flex justify-end">
+          {isCreator && (
+            <EditGroupModal 
+              groupId={id} 
+              initialName={group.name} 
+              initialIcon={group.icon} 
+            />
+          )}
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto space-y-8">
@@ -276,35 +321,46 @@ export default async function SpendingGroupDashboardPage({
             </p>
           ) : (
             <div className="space-y-2">
-              {settlements.map((s, idx) => (
-                <div
-                  key={`${s.from}-${s.to}-${s.currency_id}-${idx}`}
-                  className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-red-300 font-medium">{memberDisplay(s.from)}</span>
-                    <span className="text-zinc-500 text-xs">le debe a</span>
-                    <span className="text-emerald-300 font-medium">{memberDisplay(s.to)}</span>
+{settlements.map((s, idx) => {
+                const debtorName = memberDisplay(s.from)
+                const creditorName = memberDisplay(s.to)
+                const formattedAmount = formatCurrency(s.amount, getCurrencyCode(s.currency_id));
+                const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${formattedAmount} a ${creditorName} en el grupo ${baseGroup.name} 💸`
+                
+                return (
+                  <div
+                    key={`${s.from}-${s.to}-${s.currency_id}-${idx}`}
+                    className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-4 py-3 border border-white/5"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-red-300 font-medium">{debtorName}</span>
+                      <span className="text-zinc-500 text-xs">le debe a</span>
+                      <span className="text-emerald-300 font-medium">{creditorName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">
+                        {formattedAmount}
+                      </span>
+                      <CopyReminderButton message={reminderMessage} />
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-sm font-bold text-white">
-                      {formatCurrency(s.amount, getCurrencyCode(s.currency_id))}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
 
-        <section className="mt-10">
+    <section className="mt-10">
           <div className="flex items-center gap-2 mb-3">
             <Wallet className="w-5 h-5 text-blue-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Gastos recientes
-            </h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Gastos recientes</h2>
           </div>
-          <ExpensesClient groupId={id} members={members} expenses={calcExpenses} currencies={currencies}/>
+          <ExpensesClient 
+            groupId={id} 
+            members={members} 
+            expenses={expensesForClient} 
+            currencies={currencies}
+          />
         </section>
       </main>
     </div>
