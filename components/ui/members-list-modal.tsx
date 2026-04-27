@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, Trash2, Edit2, Users } from 'lucide-react'
+import { Check, X, Trash2, Edit2, Users, Link2, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { removeMember, updateGuestName } from '@/app/actions/members'
+import { removeMember, updateGuestName, linkMemberToProfile } from '@/app/actions/members'
 import { ConfirmModal } from './confirm-modal'
 import ToastConfirm  from './toast-confirmation'
 
@@ -39,6 +39,11 @@ export function MembersListModal({
   
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+
+  const [linkingId, setLinkingId] = useState<string | null>(null)
+  const [linkEmail, setLinkEmail] = useState("")
+  const [linkError, setLinkError] = useState("")
+  const [isLinking, setIsLinking] = useState(false)
 
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -88,6 +93,36 @@ export function MembersListModal({
   const startEditing = (memberId: string, currentName: string) => {
     setEditingId(memberId)
     setEditName(currentName)
+  }
+
+  const startLinking = (memberId: string) => {
+    setLinkingId(memberId)
+    setLinkEmail("")
+    setLinkError("")
+  }
+
+  const cancelLinking = () => {
+    setLinkingId(null)
+    setLinkEmail("")
+    setLinkError("")
+  }
+
+  const handleLinkAccount = async (memberId: string) => {
+    if (!linkEmail.trim()) return
+    setIsLinking(true)
+    setLinkError("")
+
+    const result = await linkMemberToProfile(memberId, linkEmail)
+
+    if (result.success) {
+      setLinkingId(null)
+      setLinkEmail("")
+      setToastMessage("Cuenta vinculada correctamente")
+      router.refresh()
+    } else {
+      setLinkError(result.error ?? "Error al vincular.")
+    }
+    setIsLinking(false)
   }
 
   const displayMembers = members.slice(0, 3)
@@ -149,71 +184,109 @@ export function MembersListModal({
                   {members.map((member) => {
                     const { name, avatar, initial, isGuest } = getMemberInfo(member);
                     const isEditingThis = editingId === member.id;
+                    const isLinkingThis = linkingId === member.id;
                     const isCreator = member.profiles?.id === creatorId;
                     return (
-                      <li key={member.id} className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors border border-zinc-800/50">
-                        <div className="flex items-center gap-3 w-full">
-                          
-                          {/* Avatar en la lista */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
-                            {avatar ? (
-                              <Image src={avatar} alt="avatar"  width={40} height={40} className="w-full h-full object-cover" />
-                            ) : (
-                              initial
-                            )}
+                      <li key={member.id} className="flex flex-col p-3 rounded-2xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors border border-zinc-800/50">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+
+                            {/* Avatar en la lista */}
+                            <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
+                              {avatar ? (
+                                <Image src={avatar} alt="avatar" width={40} height={40} className="w-full h-full object-cover" />
+                              ) : (
+                                initial
+                              )}
+                            </div>
+
+                            {/* Nombre / Input de Edición */}
+                            <div className="flex flex-col flex-1 min-w-0">
+                              {isEditingThis ? (
+                                <input
+                                  autoFocus
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(member.id)}
+                                  className="bg-zinc-950 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
+                                />
+                              ) : isLinkingThis ? (
+                                <div className="flex items-center gap-2">
+                                  <Mail className="w-4 h-4 text-zinc-500 shrink-0" />
+                                  <input
+                                    autoFocus
+                                    type="email"
+                                    value={linkEmail}
+                                    onChange={(e) => { setLinkEmail(e.target.value); setLinkError("") }}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleLinkAccount(member.id)}
+                                    placeholder="email@usuario.com"
+                                    className="bg-zinc-950 border border-green-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="font-medium text-zinc-200 truncate">{name}</span>
+                                  {isGuest && <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Invitado</span>}
+                                  {!isGuest && member.profiles?.email && <span className="text-[11px] text-zinc-500 truncate">{member.profiles.email}</span>}
+                                  {isCreator && <span className="text-[10px] uppercase tracking-wider text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Creador</span>}
+                                </>
+                              )}
+                            </div>
                           </div>
-                          
-                          {/* Nombre / Input de Edición */}
-                          <div className="flex flex-col flex-1">
+
+                          {/* Acciones */}
+                          <div className="flex gap-1 ml-2 shrink-0">
                             {isEditingThis ? (
-                              <input 
-                                autoFocus
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(member.id)}
-                                className="bg-zinc-950 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
-                              />
+                              <>
+                                <button onClick={() => handleSaveEdit(member.id)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : isLinkingThis ? (
+                              <>
+                                <button
+                                  onClick={() => handleLinkAccount(member.id)}
+                                  disabled={!linkEmail.trim() || isLinking}
+                                  className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors disabled:opacity-40"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button onClick={cancelLinking} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </>
                             ) : (
                               <>
-                                <span className="font-medium text-zinc-200">{name}</span>
-                                {isGuest && <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Invitado</span>}
-                                {isCreator && <span className="text-[10px] uppercase tracking-wider text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Creador</span>}
+                                {isGuest && (
+                                  <button onClick={() => startEditing(member.id, name)} className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Editar nombre">
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {isGuest && (
+                                  <button onClick={() => startLinking(member.id)} className="p-2 text-zinc-500 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors" title="Vincular cuenta">
+                                    <Link2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {!isCreator && (
+                                  <button
+                                    onClick={() => setMemberToDelete(member)}
+                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
                         </div>
-                        
-                        {/* Acciones */}
-                        <div className="flex gap-1 ml-2">
-                          {isEditingThis ? (
-                            // Modo Edición: Mostrar botón de Guardar y Cancelar
-                            <>
-                              <button onClick={() => handleSaveEdit(member.id)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </>
-                          ) : (
-                            // Modo Lectura: Mostrar Editar (solo si es invitado) y Borrar
-                            <>
-                              {isGuest && (
-                                <button onClick={() => startEditing(member.id, name)} className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                              )}
-                              {!isCreator && (
-                                <button 
-                                  onClick={() => setMemberToDelete(member)}
-                                  className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
+
+                        {/* Error inline para vinculación */}
+                        {isLinkingThis && linkError && (
+                          <p className="mt-2 ml-13 text-xs text-red-400 pl-[52px]">{linkError}</p>
+                        )}
                       </li>
                     )
                   })}
