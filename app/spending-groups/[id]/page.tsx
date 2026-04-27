@@ -8,24 +8,28 @@ import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import Link from 'next/link'
 import type { Expense as BaseExpense } from '@/app/types/expense'
+import { EditGroupModal } from '@/components/edit-group-modal'
 
-type MemberProfile = {
+export type MemberProfile = {
   id: string
   full_name: string | null
   avatar_url: string | null
   email: string | null
 }
 
-type Member = {
+export type Member = {
   id: string
   member_name: string
   profile_id: string | null
   profiles: MemberProfile | null
 }
 
-type ExpenseSigner = {
+export type ExpenseSigner = {
+  id: string
   spending_group_member_id: string
   spending_group_members: Member | null
+  amount_due: number
+  total_paid: number
 }
 
 type ExpenseWithSigners = BaseExpense & {
@@ -59,8 +63,17 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+  
+  // Por ahora queremos saber si el usuario es quien creó el grupo para mostrar el botón que permite editarlo.
+  const { data: group_reg } = await supabase
+    .from('spending_groups')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  const isCreator = user?.id === group_reg?.created_by;
 
-  // 1) Traemos grupo y miembros (consulta simple para evitar fallos por joins opcionales)
+  // 1) Traemos grupo y miembros
   const { data: group, error } = await supabase
     .from('spending_groups')
     .select(
@@ -95,27 +108,32 @@ export default async function SpendingGroupDashboardPage({
   const members = baseGroup.members || []
   const membersById = new Map(members.map((m) => [m.id, m]))
 
-  // 2) Traemos gastos + signers por separado; si falla, seguimos con lista vacía
+  // 2) Traemos gastos + signers por separado
   const { data: expensesData, error: expensesError } = await supabase
     .from('expenses')
-    .select(
-      `
+    .select(`
+      id,
+      description,
+      value,
+      created_at,
+      paid_by,
+      spending_group_members!expendings_paid_by_fkey (
+        member_name,
+        profiles ( full_name )
+      ),
+      expense_signer!expense_signer_expense_id_fkey (
         id,
-        description,
-        value,
-        created_at,
-        paid_by,
-        expense_signer!expense_signer_expense_id_fkey (
-          spending_group_member_id,
-          spending_group_members (
-            id,
-            member_name,
-            profile_id,
-            profiles ( id, full_name, avatar_url, email )
-          )
+        spending_group_member_id,
+        amount_due,
+        payments ( amount ),
+        spending_group_members (
+          id,
+          member_name,
+          profile_id,
+          profiles ( id, full_name, avatar_url, email )
         )
-      `
-    )
+      )
+    `)
     .eq('spending_group_id', id)
 
   if (expensesError) {
@@ -127,6 +145,10 @@ export default async function SpendingGroupDashboardPage({
     const signersRaw = Array.isArray(e.expense_signer)
       ? (e.expense_signer as unknown[])
       : []
+
+    const payerRaw = e.spending_group_members;
+    const payerObj = Array.isArray(payerRaw) ? payerRaw[0] : (payerRaw as Record<string, any> | null);
+    const paidByName = payerObj?.member_name || payerObj?.profiles?.full_name || 'Desconocido';
 
     const normalizeMember = (m: unknown): Member | null => {
       if (!m) return null
@@ -155,10 +177,17 @@ export default async function SpendingGroupDashboardPage({
     }
 
     const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
-      const es = esRaw as Record<string, unknown>
+      const es = esRaw as Record<string, any>
+      const payments = Array.isArray(es.payments) ? (es.payments as any[]) : []
+      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+      //const remaining_balance = es.amount_due - totalPaid;
+
       return {
+        id: String(es.id ?? ''),
         spending_group_member_id: String(es.spending_group_member_id ?? ''),
         spending_group_members: normalizeMember(es.spending_group_members),
+        amount_due: Number(es.amount_due ?? 0),
+        total_paid: totalPaid,
       }
     })
 
@@ -167,11 +196,19 @@ export default async function SpendingGroupDashboardPage({
       description: (e.description as string | undefined) ?? '',
       created_at: (e.created_at as string | undefined) ?? '',
       paid_by: String(e.paid_by ?? ''),
+      paid_by_member_name: paidByName,
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
     }
   })
+
+  const expensesForClient = calcExpenses.map((e) => ({
+    ...e,
+    currentUserSigner: e.expense_signer.find(
+      (s) => s.spending_group_members?.profile_id === user.id
+    ) || null
+  })) as (BaseExpense & { currentUserSigner: ExpenseSigner | null })[]
 
   const totalExpenses = calcExpenses.reduce((acc, e) => acc + e.value, 0)
 
@@ -230,39 +267,32 @@ export default async function SpendingGroupDashboardPage({
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
 
-  // 3) Traemos listado plano para la UI de cards/borrado
-  const { data: expensesListData, error: expensesListError } = await supabase
-    .from('expenses_with_details')
-    .select('id, description, value, created_at, paid_by, split_between')
-    .eq('spending_group_id', id)
-
-  if (expensesListError) {
-    console.error('Error fetching expenses_with_details', expensesListError)
-  }
-
-  const expensesList: BaseExpense[] = (expensesListData || []).map((e) => ({
-    id: String(e.id),
-    description: (e.description as string) ?? '',
-    value: Number(e.value ?? 0),
-    created_at: (e.created_at as string) ?? '',
-    paid_by: (e.paid_by as string) ?? '',
-    split_between: Number(e.split_between ?? 0),
-  }))
-
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      <header className="max-w-2xl mx-auto flex items-center justify-between mb-8 pt-4">
-        <Link
-          href="/spending-groups"
-          className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
+      <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center mb-8 pt-4">
+        <div className="flex justify-start">
+          <Link
+            href="/spending-groups"
+            className="p-2 hover:bg-zinc-900 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </Link>
+        </div>
+
         <div className="flex flex-col items-center">
           <span className="text-4xl mb-2">{baseGroup.icon}</span>
           <h1 className="text-2xl font-bold">{baseGroup.name}</h1>
         </div>
-        <div className="w-10" />
+
+        <div className="flex justify-end">
+          {isCreator && (
+            <EditGroupModal 
+              groupId={id} 
+              initialName={group.name} 
+              initialIcon={group.icon} 
+            />
+          )}
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto space-y-8">
@@ -357,11 +387,9 @@ export default async function SpendingGroupDashboardPage({
         <section className="mt-10">
           <div className="flex items-center gap-2 mb-3">
             <Wallet className="w-5 h-5 text-blue-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Gastos recientes
-            </h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Gastos recientes</h2>
           </div>
-          <ExpensesClient expenses={expensesList} />
+          <ExpensesClient expenses={expensesForClient} />
         </section>
       </main>
     </div>

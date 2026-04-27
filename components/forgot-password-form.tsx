@@ -47,22 +47,21 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
       {success ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Check Your Email</CardTitle>
-            <CardDescription>Password reset instructions sent</CardDescription>
+            <CardTitle className="text-2xl">Verifique su casilla de email</CardTitle>
+            <CardDescription>Se han enviado las instrucciones para restablecer su contraseña</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              If you registered using your email and password, you will receive a password reset
-              email.
+              Si te registraste utilizando tu correo electrónico y contraseña, recibirás un correo electrónico para restablecer tu contraseña.
             </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Reset Your Password</CardTitle>
+            <CardTitle className="text-2xl">Restablecer su contraseña</CardTitle>
             <CardDescription>
-              Type in your email and we&apos;ll send you a link to reset your password
+              Escribe tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -81,13 +80,13 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Sending...' : 'Send reset email'}
+                  {isLoading ? 'Enviando...' : 'Enviar email de restablecimiento'}
                 </Button>
               </div>
               <div className="mt-4 text-center text-sm">
-                Already have an account?{' '}
+                Ya tiene una cuenta?{' '}
                 <Link href="/auth/login" className="underline underline-offset-4">
-                  Login
+                  Ingresar
                 </Link>
               </div>
             </form>
