@@ -25,6 +25,8 @@ export default function ExpenseCard({ expense }: { expense: Expense}) {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const router = useRouter()
 
+  console.log(expense);
+
   useEffect(() => {
     if (toastMessage) {
       const timer = setTimeout(() => setToastMessage(null), 3000)

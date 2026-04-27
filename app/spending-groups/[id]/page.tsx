@@ -182,13 +182,13 @@ export default async function SpendingGroupDashboardPage({
       const es = esRaw as Record<string, any>
       const payments = Array.isArray(es.payments) ? (es.payments as any[]) : []
       const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-      const remaining_balance = es.amount_due - totalPaid;
+      //const remaining_balance = es.amount_due - totalPaid;
 
       return {
         id: String(es.id ?? ''),
         spending_group_member_id: String(es.spending_group_member_id ?? ''),
         spending_group_members: normalizeMember(es.spending_group_members),
-        amount_due: Number(remaining_balance ?? 0),
+        amount_due: Number(es.amount_due ?? 0),
         total_paid: totalPaid,
       }
     })
@@ -268,25 +268,6 @@ export default async function SpendingGroupDashboardPage({
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
-
-  // 3) Traemos listado plano para la UI de cards/borrado
-  /*const { data: expensesListData, error: expensesListError } = await supabase
-    .from('expenses_with_details')
-    .select('id, description, value, created_at, paid_by, split_between')
-    .eq('spending_group_id', id)
-
-  if (expensesListError) {
-    console.error('Error fetching expenses_with_details', expensesListError)
-  }
-
-  const expensesList: BaseExpense[] = (expensesListData || []).map((e) => ({
-    id: String(e.id),
-    description: (e.description as string) ?? '',
-    value: Number(e.value ?? 0),
-    created_at: (e.created_at as string) ?? '',
-    paid_by: (e.paid_by as string) ?? '',
-    split_between: Number(e.split_between ?? 0),
-  }))*/
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">

@@ -31,7 +31,6 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
   // y limpiamos el monto.
   useEffect(() => {
     if (isOpen && signers.length > 0) {
-      // Opcional: Podrías filtrar aquí para que solo seleccione por defecto a alguien que tenga deuda > 0
       setSelectedSignerId(signers[0].id)
       setAmount('')
     }
