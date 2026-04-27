@@ -11,6 +11,7 @@ import { formatCurrency } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
 import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
+import { EditGroupModal } from '@/components/edit-group-modal'
 
 
 type GroupQuery = {
@@ -86,7 +87,7 @@ export default async function SpendingGroupDashboardPage({
       value,
       created_at,
       paid_by,
-      currency_id
+      currency_id,
       spending_group_members!expendings_paid_by_fkey (
         member_name,
         profiles ( full_name )
@@ -117,7 +118,10 @@ export default async function SpendingGroupDashboardPage({
       : []
 
     const payerRaw = e.spending_group_members;
-    const payerObj = Array.isArray(payerRaw) ? payerRaw[0] : (payerRaw as Record<string, any> | null);
+    const payerObj = Array.isArray(payerRaw) 
+      ? payerRaw[0] 
+      : (payerRaw as { member_name?: string; profiles?: { full_name?: string } } | null);
+      
     const paidByName = payerObj?.member_name || payerObj?.profiles?.full_name || 'Desconocido';
 
     const normalizeMember = (m: unknown): Member | null => {
@@ -146,11 +150,17 @@ export default async function SpendingGroupDashboardPage({
       }
     }
 
-    const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
-      const es = esRaw as Record<string, any>
-      const payments = Array.isArray(es.payments) ? (es.payments as any[]) : []
-      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-      //const remaining_balance = es.amount_due - totalPaid;
+const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
+      const es = esRaw as { 
+        id?: string; 
+        spending_group_member_id?: string; 
+        spending_group_members?: unknown; 
+        amount_due?: number; 
+        payments?: { amount?: number | string }[] 
+      };
+      
+      const payments = Array.isArray(es.payments) ? es.payments : [];
+      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       return {
         id: String(es.id ?? ''),
@@ -179,7 +189,7 @@ const expensesForClient = calcExpenses.map((e) => ({
     currentUserSigner: e.expense_signer.find(
       (s) => s.spending_group_members?.profile_id === user.id
     ) || null
-  })) as (BaseExpense & { currentUserSigner: ExpenseSigner | null })[]
+  })) as ExpenseWithSigners[];
 
   const { 
     totalsByCurrency, 
@@ -193,7 +203,7 @@ const expensesForClient = calcExpenses.map((e) => ({
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
-
+  const isCreator = user.id === baseGroup.created_by;
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center mb-8 pt-4">

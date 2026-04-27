@@ -193,7 +193,7 @@ export function MembersListModal({
                           <div className="flex items-center gap-3 flex-1 min-w-0">
 
                             {/* Avatar en la lista */}
-                            <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
+                            <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
                               {avatar ? (
                                 <Image src={avatar} alt="avatar" width={40} height={40} className="w-full h-full object-cover" />
                               ) : (
@@ -286,7 +286,7 @@ export function MembersListModal({
 
                         {/* Error inline para vinculación */}
                         {isLinkingThis && linkError && (
-                          <p className="mt-2 ml-13 text-xs text-red-400 pl-[52px]">{linkError}</p>
+                          <p className="mt-2 ml-13 text-xs text-red-400 pl-13">{linkError}</p>
                         )}
                       </li>
                     )

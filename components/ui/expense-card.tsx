@@ -22,16 +22,11 @@ const formatDate = (dateString: string) => {
 
 
 export default function ExpenseCard({ 
-  expense,
-  members,
-  currencies,
-  groupId
-}: { 
-  expense: ExpenseWithSigners;
-  members: Member[];
-  currencies: Currency[];
-  groupId: string;
-}) {
+  expense, 
+  groupId, 
+  members, 
+  currencies 
+}: ExpenseProps) {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
@@ -49,12 +44,6 @@ export default function ExpenseCard({
       return () => clearTimeout(timer)
     }
   }, [toastMessage])
-
-  const getPayerName = (payerId: string) => {
-    const member = members.find(m => m.id === payerId);
-    if (!member) return "Desconocido";
-    return member.profiles?.full_name || member.member_name || "Desconocido";
-  };
 
   const confirmDelete = async () => {
     if (!expenseToDelete) return
@@ -134,6 +123,7 @@ export default function ExpenseCard({
             title="Borrar gasto"
           >
             <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -173,7 +163,7 @@ export default function ExpenseCard({
       {/* 3. MODAL DE EDICIÓN (De tu rama) */}
       {isEditing && (
         <AddExpenseModal 
-          groupId={expense.spending_group_id} // Ajustado para tomar el ID del gasto
+          groupId={groupId} // Ajustado para tomar el ID del gasto
           members={members}
           expenseToEdit={{
             ...expense,
@@ -187,9 +177,6 @@ export default function ExpenseCard({
 
       {/* 4. TOAST DE CONFIRMACIÓN */}
       {toastMessage && <ToastConfirm toastMessage={toastMessage} />}
-    </div>
-  );
-}
     </div>
   );
 }
