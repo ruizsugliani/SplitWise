@@ -4,6 +4,7 @@ import { Member } from "./member"
 export interface Expense {
   id: string
   paid_by: string
+  paid_by_member_name: string
   created_at: string
   value: number
   description: string
@@ -32,5 +33,6 @@ export type ExpenseSigner = {
 }
 
 export type ExpenseWithSigners = Expense & {
-  expense_signer: ExpenseSigner[]
+  expense_signer: ExpenseSigner[];
+  currentUserSigner?: ExpenseSigner | null;
 }
