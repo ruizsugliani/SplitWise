@@ -98,7 +98,7 @@ export default function ExpenseCard({
             </p>
           </div>
 
-          {/* Botón de Editar (De tu rama) */}
+          {/* Botón de Editar */}
           <button
             onClick={() => setIsEditing(true)}
             className="text-zinc-500 hover:text-blue-400 transition-colors"
@@ -107,14 +107,16 @@ export default function ExpenseCard({
             <Edit2 className="w-4 h-4"/>
           </button>
 
-          {/* Botón de Pagar (De main) */}
-          <button
-            onClick={() => setIsPaymentOpen(true)}
-            className="text-zinc-500 hover:text-emerald-400 transition-colors"
-            title="Registrar pago"
-          >
-            <Wallet className="w-4 h-4" />
-          </button>
+          {/* Botón de Pagar */}
+          {!isFullyPaid && (
+            <button
+              onClick={() => setIsPaymentOpen(true)}
+              className="text-zinc-500 hover:text-emerald-400 transition-colors"
+              title="Registrar pago"
+            >
+              <Wallet className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Botón de Borrar */}
           <button
