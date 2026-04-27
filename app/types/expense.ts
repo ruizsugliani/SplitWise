@@ -1,4 +1,13 @@
-import { ExpenseSigner } from "../spending-groups/[id]/page"
+import { Currency } from "./currency"
+import { Member } from "./member"
+
+export type ExpenseSigner = {
+  id: string
+  spending_group_member_id: string
+  spending_group_members: Member | null
+  amount_due: number
+  total_paid: number
+}
 
 export interface Expense {
   id: string
@@ -8,6 +17,25 @@ export interface Expense {
   value: number
   description: string
   split_between: number
-  expense_signer: ExpenseSigner[] // <- Miembros del gasto
-  currentUserSigner?: ExpenseSigner | null
+  member_ids?: string[]; // Lo mantenemos porque lo usa el modal de edición
+  currency_id: string;
+}
+
+export type ExpenseWithSigners = Expense & {
+  expense_signer: ExpenseSigner[];
+  currentUserSigner?: ExpenseSigner | null;
+}
+
+export interface ExpensesProps {
+  expenses: ExpenseWithSigners[],
+  groupId: string,
+  members: Member[];
+  currencies: Currency[];
+}
+
+export interface ExpenseProps {
+  expense: ExpenseWithSigners,
+  groupId: string,
+  members: Member[];
+  currencies: Currency[];
 }
