@@ -127,6 +127,17 @@ export function AddExpenseModal({
     );
   };
 
+  const allSelected = members.length > 0 && selectedPeople.length === members.length;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedPeople([]); // uncheck all
+    } else {
+      setSelectedPeople(members.map((m) => m.id)); // check all
+    }
+  };
+
+
   const closeModal = () => {
     setIsOpen(false);
     setAmount("");
@@ -249,6 +260,16 @@ export function AddExpenseModal({
               </label>
 
               <div className="rounded-xl border p-3">
+                <div className="flex items-center justify-between py-2 border-b mb-2">
+                  <label className="flex items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                    />
+                    Todos
+                  </label>
+                </div>
                 {members.map((p) => {
                   const isSelected = selectedPeople.includes(p.id);
 
