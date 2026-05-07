@@ -12,9 +12,15 @@ type CloseGroupButtonProps = {
   groupId: string
   isClosed: boolean
   isCreator: boolean
+  hasPendingDebts: boolean
 }
 
-export function CloseGroupButton({ groupId, isClosed, isCreator }: CloseGroupButtonProps) {
+export function CloseGroupButton({
+  groupId,
+  isClosed,
+  isCreator,
+  hasPendingDebts,
+}: CloseGroupButtonProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -74,7 +80,9 @@ export function CloseGroupButton({ groupId, isClosed, isCreator }: CloseGroupBut
         isOpen={isConfirmOpen}
         title="Cerrar grupo"
         description={
-          'Solo podrás cerrar el grupo cuando no haya deudas pendientes. Esta acción marca el grupo como cerrado.'
+          hasPendingDebts
+            ? 'Todavía hay deudas pendientes. Salda las deudas para poder cerrar el grupo.'
+            : 'Esta acción marca el grupo como cerrado.'
         }
         confirmText="Sí, cerrar"
         cancelText="Cancelar"

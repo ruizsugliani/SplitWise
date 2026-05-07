@@ -249,7 +249,12 @@ const expensesForClient = calcExpenses.map((e) => ({
             creatorId={baseGroup.created_by}
           />
           <AddExpenseModal groupId={id} members={members} currencies={currencies} />
-          <CloseGroupButton groupId={id} isClosed={false} isCreator={isCreator} />
+          <CloseGroupButton
+            groupId={id}
+            isClosed={false}
+            isCreator={isCreator}
+            hasPendingDebts={settlements.length > 0}
+          />
         </div>
 
         <section className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2 h-fit">

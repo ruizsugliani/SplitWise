@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getRemainingSignerDebt } from '@/lib/utils/debt-calculator'
 
 type CloseGroupResult = {
   success: boolean
@@ -10,13 +11,12 @@ type CloseGroupResult = {
 
 type ExpenseSignerRow = {
   spending_group_member_id: string
+  amount_due: number
+  payments: { amount: number | string | null }[] | null
 }
 
 type ExpenseRow = {
-  id: string
   paid_by: string
-  value: number
-  currency_id: string | null
   expense_signer: ExpenseSignerRow[] | null
 }
 
@@ -50,26 +50,16 @@ export async function closeGroup(groupId: string): Promise<CloseGroupResult> {
       return { success: false, error: 'El grupo ya está cerrado.' }
     }
 
-    const { data: membersData, error: membersError } = await supabase
-      .from('spending_group_members')
-      .select('id')
-      .eq('spending_group_id', groupId)
-
-    if (membersError) {
-      return { success: false, error: 'No se pudieron obtener los miembros del grupo.' }
-    }
-
-    const memberIds = (membersData || []).map((m) => m.id)
-
     const { data: expensesData, error: expensesError } = await supabase
       .from('expenses')
       .select(
         `
-          id,
           paid_by,
-          value,
-          currency_id,
-          expense_signer ( spending_group_member_id )
+          expense_signer (
+            spending_group_member_id,
+            amount_due,
+            payments ( amount )
+          )
         `
       )
       .eq('spending_group_id', groupId)
@@ -78,34 +68,19 @@ export async function closeGroup(groupId: string): Promise<CloseGroupResult> {
       return { success: false, error: 'No se pudieron obtener los gastos del grupo.' }
     }
 
-    const balancesByCurrency: Record<string, Record<string, number>> = {}
+    const hasPendingDebt = ((expensesData || []) as ExpenseRow[]).some((expense) =>
+      (expense.expense_signer || []).some((signer) => {
+        if (signer.spending_group_member_id === expense.paid_by) {
+          return false
+        }
 
-    for (const expense of (expensesData || []) as ExpenseRow[]) {
-      const currencyId = expense.currency_id || 'default'
-      if (!balancesByCurrency[currencyId]) {
-        balancesByCurrency[currencyId] = {}
-      }
+        const totalPaid = (signer.payments || []).reduce(
+          (sum, payment) => sum + (Number(payment.amount) || 0),
+          0
+        )
 
-      const signers = expense.expense_signer || []
-      if (signers.length === 0) {
-        continue
-      }
-
-      const share = Number(expense.value || 0) / signers.length
-
-      for (const signer of signers) {
-        const memberId = signer.spending_group_member_id
-        balancesByCurrency[currencyId][memberId] =
-          (balancesByCurrency[currencyId][memberId] || 0) - share
-      }
-
-      balancesByCurrency[currencyId][expense.paid_by] =
-        (balancesByCurrency[currencyId][expense.paid_by] || 0) + Number(expense.value || 0)
-    }
-
-    const tolerance = 0.01
-    const hasPendingDebt = Object.values(balancesByCurrency).some((balances) =>
-      memberIds.some((memberId) => Math.abs(balances[memberId] || 0) > tolerance)
+        return getRemainingSignerDebt(signer.amount_due, totalPaid) > 0
+      })
     )
 
     if (hasPendingDebt) {
