@@ -13,6 +13,8 @@ import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
 import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
 import { EditGroupModal } from '@/components/edit-group-modal'
+import { memberHasPendingDebt, getCurrentMember } from '@/lib/utils/pending-debt'
+import LeaveGroupButton from '@/components/leave-group-button'
 
 
 type GroupQuery = {
@@ -211,6 +213,15 @@ const expensesForClient = calcExpenses.map((e) => ({
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
   const isCreator = user.id === baseGroup.created_by;
+  
+  const currentMember = getCurrentMember(members, user.id);
+
+  const hasPendingDebt = currentMember
+    ? memberHasPendingDebt(calcExpenses, currentMember.id)
+    : false;
+
+  const canLeaveGroup = !isCreator && !hasPendingDebt && !!currentMember;
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
       <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center mb-8 pt-4">
@@ -249,12 +260,20 @@ const expensesForClient = calcExpenses.map((e) => ({
             creatorId={baseGroup.created_by}
           />
           <AddExpenseModal groupId={id} members={members} currencies={currencies} />
-          <CloseGroupButton
-            groupId={id}
-            isClosed={false}
-            isCreator={isCreator}
-            hasPendingDebts={settlements.length > 0}
-          />
+          <CloseGroupButton groupId={id} isClosed={false} isCreator={isCreator} hasPendingDebts={settlements.length > 0}/>
+          {!isCreator && (
+            <div className="col-span-2">
+              <LeaveGroupButton
+                groupId={id}
+                disabled={!canLeaveGroup}
+                debtMessage={
+                  hasPendingDebt
+                    ? 'No podés salir porque todavía debés dinero.'
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </div>
 
         <section className="rounded-3xl border border-white/10 bg-white/3 p-5 flex flex-col gap-2 h-fit">
