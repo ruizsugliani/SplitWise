@@ -8,6 +8,13 @@ export interface DebtCalculationResult {
   settlements: { from: string; to: string; amount: number; currency_id: string }[];
 }
 
+const DEBT_TOLERANCE = 0.01;
+
+export function getRemainingSignerDebt(amountDue: number, totalPaid: number) {
+  const remaining = Number(amountDue || 0) - Number(totalPaid || 0);
+  return remaining > DEBT_TOLERANCE ? remaining : 0;
+}
+
 export function calculateGroupDebts(
   expenses: ExpenseWithSigners[],
   members: Member[],
@@ -28,13 +35,18 @@ export function calculateGroupDebts(
     const curr = expense.currency_id;
     const creditor = expense.paid_by;
     const signers = expense.expense_signer || [];
-    const share = expense.value / (signers.length || 1);
 
     signers.forEach(signer => {
       const debtor = signer.spending_group_member_id;
-      balancesByCurrency[debtor][curr] = (balancesByCurrency[debtor][curr] || 0) - share;
+      const remainingDebt = getRemainingSignerDebt(signer.amount_due, signer.total_paid);
+
+      if (remainingDebt <= 0 || debtor === creditor) {
+        return;
+      }
+
+      balancesByCurrency[debtor][curr] = (balancesByCurrency[debtor][curr] || 0) - remainingDebt;
+      balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + remainingDebt;
     });
-    balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + expense.value;
   });
 
   // 3. Deudas Directas Exactas
@@ -48,12 +60,13 @@ export function calculateGroupDebts(
     const curr = expense.currency_id;
     const creditor = expense.paid_by;
     const signers = expense.expense_signer || [];
-    const share = expense.value / (signers.length || 1);
 
     signers.forEach(signer => {
       const debtor = signer.spending_group_member_id;
-      if (debtor !== creditor) {
-        directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + share;
+      const remainingDebt = getRemainingSignerDebt(signer.amount_due, signer.total_paid);
+
+      if (debtor !== creditor && remainingDebt > 0) {
+        directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + remainingDebt;
       }
     });
   });
