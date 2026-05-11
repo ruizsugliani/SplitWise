@@ -260,7 +260,7 @@ const expensesForClient = calcExpenses.map((e) => ({
             creatorId={baseGroup.created_by}
           />
           <AddExpenseModal groupId={id} members={members} currencies={currencies} />
-          <CloseGroupButton groupId={id} isClosed={false} isCreator={isCreator} />
+          <CloseGroupButton groupId={id} isClosed={false} isCreator={isCreator} hasPendingDebts={settlements.length > 0}/>
           {!isCreator && (
             <div className="col-span-2">
               <LeaveGroupButton
