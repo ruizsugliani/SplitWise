@@ -1,14 +1,14 @@
 "use client"
 
 import { Expense, ExpenseProps } from "@/app/types/expense";
-import { Edit2, Trash2, Wallet, CheckCircle2, AlertCircle } from "lucide-react";
+import { Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
 import { useEffect, useState } from 'react'
 import { ConfirmModal } from "./confirm-modal";
 import { useRouter } from 'next/navigation'
 import { removeExpense } from "@/app/actions/expenses";
 import ToastConfirm from "./toast-confirmation";
 import { AddExpenseModal } from "../add-expense-modal";
-// import { format } from "path";
+import { ExpenseHistory } from "../expense-history-modal";
 import { formatCurrency } from "@/app/types/currency";
 import { PaymentModal } from "../payment-modal";
 
@@ -27,6 +27,7 @@ export default function ExpenseCard({
   members, 
   currencies 
 }: ExpenseProps) {
+  const [isLookingAtExpenseHistory, setIsLookingAtExpenseHistory] = useState(false)
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
@@ -35,8 +36,6 @@ export default function ExpenseCard({
   const router = useRouter()
   const expenseCurrency = currencies.find(c => c.id === expense.currency_id);
   const currencyCode = expenseCurrency?.code || 'ARS';
-
-  console.log(expense);
 
   useEffect(() => {
     if (toastMessage) {
@@ -80,7 +79,6 @@ export default function ExpenseCard({
         <div>
         <h3 className="font-medium flex items-center gap-2">
             {expense.description}
-            {/* Icono de estado de pago */}
             {isFullyPaid ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             ) : (
@@ -93,12 +91,19 @@ export default function ExpenseCard({
 
         <div className="flex items-center gap-3">
           <div className="text-right">
-<p className="font-semibold">
+              <p className="font-semibold">
               {formatCurrency(expense.value, currencyCode)}
             </p>
           </div>
 
-          {/* Botón de Editar */}
+          <button
+            onClick={() => setIsLookingAtExpenseHistory(true)}
+            className="text-zinc-500 hover:text-blue-400 transition-colors"
+            title="Visualizar historial del gasto"
+          >
+            <Receipt className="w-4 h-4"/>
+          </button>
+
           <button
             onClick={() => setIsEditing(true)}
             className="text-zinc-500 hover:text-blue-400 transition-colors"
@@ -107,7 +112,6 @@ export default function ExpenseCard({
             <Edit2 className="w-4 h-4"/>
           </button>
 
-          {/* Botón de Pagar */}
           {!isFullyPaid && (
             <button
               onClick={() => setIsPaymentOpen(true)}
@@ -118,7 +122,6 @@ export default function ExpenseCard({
             </button>
           )}
 
-          {/* Botón de Borrar */}
           <button
             onClick={() => setExpenseToDelete(expense)}
             className="text-zinc-500 hover:text-red-400 transition-colors"
@@ -136,14 +139,21 @@ export default function ExpenseCard({
         <span>{formatDate(expense.created_at)}</span>
       </div>
 
-{/* 1. MODAL DE PAGO (De main) */}
+
       <PaymentModal 
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
         signers={signersOptions}
       />
 
-      {/* 2. MODAL DE ELIMINACIÓN (Fusionado) */}
+      {isLookingAtExpenseHistory && (
+        <ExpenseHistory 
+          expenseId={expense.id}
+          currencyCode={currencyCode}
+          onClose={() => setIsLookingAtExpenseHistory(false)}
+        />
+      )}
+
       {expenseToDelete && (
         <ConfirmModal 
           isOpen={expenseToDelete !== null}
@@ -162,7 +172,6 @@ export default function ExpenseCard({
         />
       )}
 
-      {/* 3. MODAL DE EDICIÓN (De tu rama) */}
       {isEditing && (
         <AddExpenseModal 
           groupId={groupId} // Ajustado para tomar el ID del gasto
@@ -177,7 +186,6 @@ export default function ExpenseCard({
         />
       )}
 
-      {/* 4. TOAST DE CONFIRMACIÓN */}
       {toastMessage && <ToastConfirm toastMessage={toastMessage} />}
     </div>
   );
