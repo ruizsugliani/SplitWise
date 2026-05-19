@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ReceiptText, X } from "lucide-react";
+import { Receipt, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Expense } from "@/app/types/expense";
@@ -155,11 +155,11 @@ export function AddExpenseModal({
     <>
       {!onCloseExternal && (
         <button
-          className="col-span-2 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-bold transition-all active:scale-[0.98]"
           onClick={() => setIsOpen(true)}
+          className="w-full group flex items-center justify-center gap-3 rounded-2xl bg-emerald-500/10 px-4 py-4 text-emerald-400 border border-emerald-500/20 font-semibold transition-all hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] active:scale-[0.98]"
         >
-          <ReceiptText className="w-5 h-5" />
-          Agregar gasto
+          <Receipt className="w-5 h-5 transition-transform group-hover:-translate-y-0.5" />
+          <span>Agregar nuevo gasto</span>
         </button>
       )}
 

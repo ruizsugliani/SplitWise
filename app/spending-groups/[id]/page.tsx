@@ -247,7 +247,7 @@ export default async function SpendingGroupDashboardPage({
       // ----------------- PESTAÑA: GASTOS -----------------
       gastosSection={
         <>
-          <div className="w-full">
+          <div className="w-full mb-2">
             <AddExpenseModal groupId={id} members={members} currencies={currencies} />
           </div>
 

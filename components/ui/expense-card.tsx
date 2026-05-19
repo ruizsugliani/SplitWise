@@ -1,8 +1,8 @@
 "use client"
 
 import { Expense, ExpenseProps } from "@/app/types/expense";
-import { Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
-import { useEffect, useState } from 'react'
+import { MoreVertical, Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
+import { useEffect, useState, useRef } from 'react'
 import { ConfirmModal } from "./confirm-modal";
 import { useRouter } from 'next/navigation'
 import { removeExpense } from "@/app/actions/expenses";
@@ -35,7 +35,18 @@ export default function ExpenseCard({
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
   const expenseCurrency = currencies.find(c => c.id === expense.currency_id);
-  const currencyCode = expenseCurrency?.code || 'ARS';
+  const currencyCode = expenseCurrency?.code || 'ARS';const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (toastMessage) {
@@ -91,44 +102,61 @@ export default function ExpenseCard({
 
         <div className="flex items-center gap-3">
           <div className="text-right">
-              <p className="font-semibold">
+            <p className="font-semibold text-lg">
               {formatCurrency(expense.value, currencyCode)}
             </p>
           </div>
 
-          <button
-            onClick={() => setIsLookingAtExpenseHistory(true)}
-            className="text-zinc-500 hover:text-blue-400 transition-colors"
-            title="Visualizar historial del gasto"
-          >
-            <Receipt className="w-4 h-4"/>
-          </button>
-
-          <button
-            onClick={() => setIsEditing(true)}
-            className="text-zinc-500 hover:text-blue-400 transition-colors"
-            title="Editar gasto"
-          >
-            <Edit2 className="w-4 h-4"/>
-          </button>
-
-          {!isFullyPaid && (
+          {/* Menú de acciones (Tres puntitos) */}
+          <div className="relative" ref={menuRef}>
             <button
-              onClick={() => setIsPaymentOpen(true)}
-              className="text-zinc-500 hover:text-emerald-400 transition-colors"
-              title="Registrar pago"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
             >
-              <Wallet className="w-4 h-4" />
+              <MoreVertical className="w-5 h-5" />
             </button>
-          )}
 
-          <button
-            onClick={() => setExpenseToDelete(expense)}
-            className="text-zinc-500 hover:text-red-400 transition-colors"
-            title="Borrar gasto"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+            {/* Dropdown Flotante */}
+            {isMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-[#1a1a1a] border border-white/10 shadow-2xl overflow-hidden z-10 py-1 animate-in fade-in zoom-in-95 duration-100">
+                <button
+                  onClick={() => setIsLookingAtExpenseHistory(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
+                >
+                  <Receipt className="w-4 h-4"/>
+                  Historial
+                </button>
+
+                {!isFullyPaid && (
+                <button
+                  onClick={() => setIsPaymentOpen(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Registrar pago
+                </button>
+              )}
+
+                <button
+                  onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-blue-400 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar gasto
+                </button>
+                
+                <div className="h-px bg-white/5 my-1 mx-2" />
+                
+                <button
+                  onClick={() => { setExpenseToDelete(expense); setIsMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar gasto
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
