@@ -63,7 +63,14 @@ export function CloseGroupButton({
       <button
         onClick={() => setIsConfirmOpen(true)}
         disabled={disabled}
-        className="col-span-2 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 py-4 rounded-2xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`
+            w-full flex items-center justify-center gap-2  rounded-2xl p-4 font-semibold hover:bg-red-500/20 transition-all
+            ${
+              disabled
+                ? 'bg-red-900/40 text-red-300/40 cursor-not-allowed opacity-50 '
+                : 'scale-[0.98] bg-red-600/10 text-red-400 border border-red-500/20'
+            }
+          `}
         title={
           isClosed
             ? 'Este grupo ya está cerrado'

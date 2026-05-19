@@ -99,7 +99,7 @@ export function AddMemberModal({ groupId }: AddMemberModalProps) {
     <>
       <button 
         onClick={() => setIsOpen(true)}
-        className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-800 py-4 px-4 rounded-2xl font-semibold transition-all border border-zinc-800 active:scale-95"
+        className="w-full flex items-center justify-center gap-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl p-4 font-semibold hover:bg-blue-500/20 transition-all active:scale-[0.98]"
       >            
         <UserPlus className="w-5 h-5 text-white" />
         <span className="text-white">Agregar miembro</span>

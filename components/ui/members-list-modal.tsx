@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Check, X, Trash2, Edit2, Users, Link2, Mail } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Check, X, Trash2, Edit2, Users, Link2, Mail, MoreVertical } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { removeMember, updateGuestName, linkMemberToProfile } from '@/app/actions/members'
@@ -25,7 +25,7 @@ const getMemberInfo = (member: Member) => {
 }
 
 export function MembersListModal({ 
-//   groupId, 
+  // groupId, 
   members, 
   memberCount,
   creatorId
@@ -49,6 +49,10 @@ export function MembersListModal({
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+  // NUEVO: Estado para el menú de los tres puntitos
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   const router = useRouter()
 
   useEffect(() => {
@@ -57,6 +61,17 @@ export function MembersListModal({
       return () => clearTimeout(timer)
     }
   }, [toastMessage])
+
+  // Cierra el menú desplegable si se hace clic afuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const confirmDelete = async () => {
     if (!memberToDelete) return
@@ -75,13 +90,6 @@ export function MembersListModal({
     }
     setIsDeleting(null)
   }
-
-  // const handleDelete = async (memberId: string) => {
-  //   setIsDeleting(memberId)
-  //   await removeMember(memberId)
-  //   router.refresh()
-  //   setIsDeleting(null)
-  // }
 
   const handleSaveEdit = async (memberId: string) => {
     if (!editName.trim()) return;
@@ -133,51 +141,54 @@ export function MembersListModal({
     <>
       <button 
         onClick={() => setIsOpen(true)}
-        className="flex items-center justify-center gap-3 bg-zinc-900 hover:bg-zinc-800 transition-colors py-4 px-4 rounded-2xl border border-zinc-800 w-full shadow-sm"
+        className="w-full flex items-center justify-between bg-zinc-900/60 border border-white/5 rounded-2xl p-4 hover:bg-zinc-800 transition-all active:scale-[0.98]"
       >
-        <div className="flex -space-x-2">
-          {displayMembers.map((m, i) => {
-            const { avatar, initial, isGuest } = getMemberInfo(m);
-            return (
-              <div 
-                key={m.id} 
-                className={`w-8 h-8 rounded-full border-2 border-zinc-900 flex items-center justify-center text-xs font-bold z-[${3-i}] overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400' : 'bg-blue-600 text-white'}`}
-              >
-                {avatar ? (
-                  <Image src={avatar} alt="avatar" width={40} height={40} className="w-full h-full object-cover" />
-                ) : (
-                  initial
-                )}
-              </div>
-            )
-          })}
-          {extraCount > 0 && (
-             <div className="w-8 h-8 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400 z-0">
-               +{extraCount}
-             </div>
-          )}
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {displayMembers.map((m, i) => {
+              const { avatar, initial } = getMemberInfo(m);
+              return (
+                <div 
+                  key={m.id} 
+                  className="w-8 h-8 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 overflow-hidden relative"
+                  style={{ zIndex: 3 - i }}
+                >
+                  {avatar ? (
+                    <Image src={avatar} alt="avatar" fill className="object-cover" sizes="32px" />
+                  ) : (
+                    initial
+                  )}
+                </div>
+              )
+            })}
+            {extraCount > 0 && (
+               <div className="w-8 h-8 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400 z-0 relative">
+                 +{extraCount}
+               </div>
+            )}
+          </div>
+          <span className="font-semibold text-zinc-300">{memberCount} Miembros</span>
         </div>
-        <span className="text-zinc-400 font-medium">{memberCount} Miembros</span>
       </button>
 
       {/* MODAL PRINCIPAL */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#121212] border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
+          <div className="bg-[#121212] border border-white/10 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
             
             {/* Header del Modal */}
-            <div className="flex justify-between items-center p-6 border-b border-zinc-800">
+            <div className="flex justify-between items-center p-6 border-b border-white/5">
               <h2 className="text-xl font-bold flex items-center gap-2 text-white">
-                <Users className="w-5 h-5 text-blue-500" />
+                <Users className="w-5 h-5 text-blue-400" />
                 Gestión de Miembros
               </h2>
-              <button onClick={() => setIsOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
-                <X className="w-6 h-6" />
+              <button onClick={() => setIsOpen(false)} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Lista de Miembros */}
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar pb-10" ref={menuRef}>
               {members.length === 0 ? (
                 <p className="text-zinc-500 text-center py-4">No hay miembros aún.</p>
                 ) : (
@@ -187,21 +198,23 @@ export function MembersListModal({
                     const isEditingThis = editingId === member.id;
                     const isLinkingThis = linkingId === member.id;
                     const isCreator = member.profiles?.id === creatorId;
+                    const isMenuOpen = openMenuId === member.id;
+                    
                     return (
-                      <li key={member.id} className="flex flex-col p-3 rounded-2xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors border border-zinc-800/50">
+                      <li key={member.id} className="flex flex-col p-3 rounded-2xl bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors border border-white/5 relative">
                         <div className="flex items-center justify-between w-full">
+                          
                           <div className="flex items-center gap-3 flex-1 min-w-0">
-
                             {/* Avatar en la lista */}
-                            <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold overflow-hidden ${isGuest ? 'bg-zinc-800 text-zinc-400 border border-dashed border-zinc-600' : 'bg-blue-600 text-white'}`}>
+                            <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold shadow-inner relative overflow-hidden ${isCreator ? 'bg-linear-to-br from-blue-500 to-blue-600 text-white' : 'bg-linear-to-br from-zinc-700 to-zinc-800 text-white'}`}>
                               {avatar ? (
-                                <Image src={avatar} alt="avatar" width={40} height={40} className="w-full h-full object-cover" />
+                                <Image src={avatar} alt="avatar" fill className="object-cover" sizes="40px" />
                               ) : (
                                 initial
                               )}
                             </div>
 
-                            {/* Nombre / Input de Edición */}
+                            {/* Nombre / Input de Edición / Badges */}
                             <div className="flex flex-col flex-1 min-w-0">
                               {isEditingThis ? (
                                 <input
@@ -209,7 +222,7 @@ export function MembersListModal({
                                   value={editName}
                                   onChange={(e) => setEditName(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(member.id)}
-                                  className="bg-zinc-950 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
+                                  className="bg-black/50 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 w-full"
                                 />
                               ) : isLinkingThis ? (
                                 <div className="flex items-center gap-2">
@@ -221,15 +234,17 @@ export function MembersListModal({
                                     onChange={(e) => { setLinkEmail(e.target.value); setLinkError("") }}
                                     onKeyDown={(e) => e.key === 'Enter' && handleLinkAccount(member.id)}
                                     placeholder="email@usuario.com"
-                                    className="bg-zinc-950 border border-green-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full"
+                                    className="bg-black/50 border border-blue-500/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 w-full"
                                   />
                                 </div>
                               ) : (
                                 <>
-                                  <span className="font-medium text-zinc-200 truncate">{name}</span>
-                                  {isGuest && <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Invitado</span>}
-                                  {!isGuest && member.profiles?.email && <span className="text-[11px] text-zinc-500 truncate">{member.profiles.email}</span>}
-                                  {isCreator && <span className="text-[10px] uppercase tracking-wider text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Creador</span>}
+                                  <span className="font-semibold text-white text-sm truncate">{name}</span>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {isGuest && <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">Invitado</span>}
+                                    {!isGuest && member.profiles?.email && <span className="text-xs text-zinc-500 truncate">{member.profiles.email}</span>}
+                                    {isCreator && <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Creador</span>}
+                                  </div>
                                 </>
                               )}
                             </div>
@@ -239,7 +254,7 @@ export function MembersListModal({
                           <div className="flex gap-1 ml-2 shrink-0">
                             {isEditingThis ? (
                               <>
-                                <button onClick={() => handleSaveEdit(member.id)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors">
+                                <button onClick={() => handleSaveEdit(member.id)} className="p-2 text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors">
                                   <Check className="w-4 h-4" />
                                 </button>
                                 <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
@@ -251,7 +266,7 @@ export function MembersListModal({
                                 <button
                                   onClick={() => handleLinkAccount(member.id)}
                                   disabled={!linkEmail.trim() || isLinking}
-                                  className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors disabled:opacity-40"
+                                  className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors disabled:opacity-40"
                                 >
                                   <Check className="w-4 h-4" />
                                 </button>
@@ -260,33 +275,56 @@ export function MembersListModal({
                                 </button>
                               </>
                             ) : (
-                              <>
-                                {isGuest && (
-                                  <button onClick={() => startEditing(member.id, name)} className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Editar nombre">
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
+                              <div className="relative">
+                                {/* Botón Menú Kebab */}
+                                <button
+                                  onClick={() => setOpenMenuId(isMenuOpen ? null : member.id)}
+                                  className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                                >
+                                  <MoreVertical className="w-5 h-5" />
+                                </button>
+
+                                {/* Dropdown Flotante */}
+                                {isMenuOpen && (
+                                  <div className="absolute right-0 top-10 w-48 rounded-2xl bg-[#1a1a1a] border border-white/10 shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                    {isGuest && (
+                                      <>
+                                        <button 
+                                          onClick={() => { startLinking(member.id); setOpenMenuId(null); }} 
+                                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-blue-400 transition-colors"
+                                        >
+                                          <Link2 className="w-4 h-4" />
+                                          Vincular cuenta
+                                        </button>
+                                        <button 
+                                          onClick={() => { startEditing(member.id, name); setOpenMenuId(null); }} 
+                                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                          Editar nombre
+                                        </button>
+                                        <div className="h-px bg-white/5 my-1 mx-2" />
+                                      </>
+                                    )}
+                                    {!isCreator && (
+                                      <button
+                                        onClick={() => { setMemberToDelete(member); setOpenMenuId(null); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        Eliminar miembro
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
-                                {isGuest && (
-                                  <button onClick={() => startLinking(member.id)} className="p-2 text-zinc-500 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors" title="Vincular cuenta">
-                                    <Link2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                                {!isCreator && (
-                                  <button
-                                    onClick={() => setMemberToDelete(member)}
-                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
 
                         {/* Error inline para vinculación */}
                         {isLinkingThis && linkError && (
-                          <p className="mt-2 ml-13 text-xs text-red-400 pl-13">{linkError}</p>
+                          <p className="mt-2 text-xs text-red-400 pl-13">{linkError}</p>
                         )}
                       </li>
                     )
@@ -298,7 +336,7 @@ export function MembersListModal({
         </div>
       )}
 
-      {/* 1. MODAL DE CONFIRMACIÓN (Sobre el anterior) */}
+      {/* 1. MODAL DE CONFIRMACIÓN */}
       {memberToDelete && (
         <ConfirmModal 
           isOpen={memberToDelete !== null}
@@ -317,7 +355,7 @@ export function MembersListModal({
         />
       )}
 
-      {/* 2. TOAST DE CONFIRMACIÓN (Notificación flotante) */}
+      {/* 2. TOAST DE CONFIRMACIÓN */}
       {toastMessage && (
         <ToastConfirm toastMessage={toastMessage}/>
       )}
