@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { Bell, Check } from 'lucide-react'
 
 export function CopyReminderButton({ message }: { message: string }) {
   const [copied, setCopied] = useState(false)
@@ -15,10 +15,15 @@ export function CopyReminderButton({ message }: { message: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
+      title="Copiar mensaje recordatorio"
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 ${
+        copied 
+          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+          : 'bg-zinc-800/50 text-zinc-400 hover:text-white hover:bg-blue-500/20 border border-transparent'
+      }`}
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-      <span>{copied ? 'Copiado' : 'Recordatorio'}</span>
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+      <span>{copied ? 'Copiado' : 'Recordar'}</span>
     </button>
   )
 }

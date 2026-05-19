@@ -38,14 +38,11 @@ export default function LeaveGroupButton({
           disabled={disabled}
           onClick={() => setOpen(true)}
           className={`
-            w-full col-span-2 rounded-2xl py-4
-            flex items-center justify-center gap-2
-            font-semibold text-lg
-            transition-all duration-200
+            w-full flex items-center justify-center gap-2  rounded-2xl p-4 font-semibold hover:bg-red-500/20 transition-all
             ${
               disabled
-                ? 'bg-orange-900/40 text-orange-300/40 cursor-not-allowed'
-                : 'bg-orange-600 hover:bg-orange-500 text-white'
+                ? 'bg-orange-900/40 text-orange-300/40 cursor-not-allowed opacity-50 '
+                : 'scale-[0.98] bg-red-500/10 text-red-400 border border-red-500/20'
             }
           `}
         >
