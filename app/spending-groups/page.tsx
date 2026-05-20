@@ -5,6 +5,7 @@ import { CreateGroupModal } from '@/components/create-group-modal';
 import { LogoutButton } from '@/components/logout-button';
 import { ProfileButton } from '@/components/profile-button';
 import { ReopenGroupButton } from '@/components/reopen-group-button';
+import { Users, Archive } from 'lucide-react'; // <-- NUEVOS ICONOS
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -14,127 +15,121 @@ const currencyFormatter = new Intl.NumberFormat('es-AR', {
 
 export default async function SpendingGroupsPage() {
     const supabase = await createClient()
-    
-    // 1. Obtenemos la sesión del usuario
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-        redirect('/auth/login')
-    }
+    if (authError || !user) redirect('/auth/login')
 
-    // 2. Traemos los grupos donde el usuario es miembro
-    // Usamos una consulta relacional para contar los miembros automáticamente
     const { data: groups, error: groupsError } = await supabase
     .from('spending_groups')
-    .select(`
-        id,
-        name,
-        icon,
-        created_by,
-        closed_at,
-        spending_group_members(count),
-        expenses (
-            value
-        )
-    `)
+    .select(`id, name, icon, created_by, closed_at, spending_group_members(count), expenses (value)`)
 
-    if (groupsError) {
-        console.error("Error fetching groups:", groupsError)
-    }
+    if (groupsError) console.error("Error fetching groups:", groupsError)
 
     const groupsWithTotals = (groups || []).map((group) => {
         const membersCount = group.spending_group_members?.[0]?.count || 0
         const expenses = group.expenses || []
-        const expensesCount = expenses.length
         const totalAmount = expenses.reduce((acc: number, e: { value?: number | null }) => acc + Number(e.value || 0), 0)
-
-        return {
-            ...group,
-            membersCount,
-            expensesCount,
-            totalAmount,
-        }
+        return { ...group, membersCount, expensesCount: expenses.length, totalAmount }
     })
 
     const activeGroups = groupsWithTotals.filter((group) => !group.closed_at)
     const closedGroups = groupsWithTotals.filter((group) => Boolean(group.closed_at))
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] p-6 text-white">
+        <div className="min-h-screen bg-[#0a0a0a] p-6 text-white pb-32">
             <header className="max-w-2xl mx-auto text-center mb-10 pt-10">
-                <h1 className="text-3xl font-bold tracking-tight">SplitWise</h1>
-                <p className="text-zinc-400">Administra tus gastos en grupo</p>
+                <h1 className="text-4xl font-bold tracking-tight bg-linear-to-br from-white to-zinc-400 bg-clip-text text-transparent mb-2">SplitWise</h1>
+                <p className="text-zinc-500 font-medium">Administra tus gastos en grupo</p>
             </header>
 
-            <main className="max-w-xl mx-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-400">
-                        Grupos Activos
-                    </h2>
-                </div>
+            <main className="max-w-xl mx-auto space-y-10">
+                {/* GRUPOS ACTIVOS */}
+                <section>
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                        <Users className="w-5 h-5 text-emerald-400" />
+                        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                            Grupos Activos
+                        </h2>
+                    </div>
 
-                <div className="space-y-4">
-                    {activeGroups.length > 0 ? (
-                        activeGroups.map((group) => (
-                            <SpendingGroupCard
-                                key={group.id}
-                                id={group.id}
-                                name={group.name}
-                                icon={group.icon}
-                                members={group.membersCount}
-                                expenses_count={group.expensesCount}
-                                total_amount={currencyFormatter.format(group.totalAmount)}
-                            />
-                        ))
-                    ) : (
-                        <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl">
-                            <p className="text-zinc-500">No tienes grupos activos aún.</p>
-                            <p className="text-zinc-600 text-sm">¡Crea uno con el botón +!</p>
-                        </div>
-                    )}
-                </div>
-
-                <div className="mt-10 mb-4">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-                        Historial (Grupos Cerrados)
-                    </h2>
-                </div>
-
-                <div className="space-y-4">
-                    {closedGroups.length > 0 ? (
-                        closedGroups.map((group) => (
-                            <div
-                                key={group.id}
-                                className="flex items-center justify-between gap-4 mt-2 mb-2 p-4 bg-[#171717] rounded-2xl border border-white/10"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 flex items-center justify-center text-3xl bg-white/5 rounded-xl">
-                                        {group.icon}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg leading-tight text-white">{group.name}</h3>
-                                        <p className="text-sm text-zinc-400">
-                                            {group.membersCount} miembros • {group.expensesCount} gastos
-                                        </p>
-                                        <p className="text-xs text-zinc-500 mt-1">
-                                            Cerrado el {group.closed_at ? new Date(group.closed_at).toLocaleString('es-AR') : '-'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <ReopenGroupButton groupId={group.id} canReopen={group.created_by === user.id} />
+                    <div className="space-y-3">
+                        {activeGroups.length > 0 ? (
+                            activeGroups.map((group) => (
+                                <SpendingGroupCard
+                                    key={group.id}
+                                    id={group.id}
+                                    name={group.name}
+                                    icon={group.icon}
+                                    members={group.membersCount}
+                                    expenses_count={group.expensesCount}
+                                    total_amount={currencyFormatter.format(group.totalAmount)}
+                                />
+                            ))
+                        ) : (
+                            <div className="text-center py-16 bg-zinc-900/30 border border-dashed border-white/10 rounded-3xl">
+                                <p className="text-zinc-400">No tienes grupos activos aún.</p>
+                                <p className="text-zinc-500 text-sm mt-1">¡Crea uno con el botón +!</p>
                             </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-8 border border-dashed border-white/5 rounded-2xl">
-                            <p className="text-zinc-500 text-sm">Todavía no hay grupos cerrados.</p>
-                        </div>
-                    )}
-                </div>
-                
-                <LogoutButton />
-                <ProfileButton />
-                <CreateGroupModal />
+                        )}
+                    </div>
+                </section>
+
+                {/* GRUPOS CERRADOS */}
+                <section>
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                        <Archive className="w-5 h-5 text-amber-500/80" />
+                        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                            Historial
+                        </h2>
+                    </div>
+
+                    <div className="space-y-3">
+                        {closedGroups.length > 0 ? (
+                            closedGroups.map((group) => (
+                                <div
+                                    key={group.id}
+                                    className="flex items-center justify-between gap-4 p-4 bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors rounded-2xl border border-white/5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 flex items-center justify-center text-2xl bg-black/50 border border-white/5 rounded-full shadow-inner">
+                                            {group.icon}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-white">{group.name}</h3>
+                                            <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
+                                                <span>{group.membersCount} miembros</span>
+                                                <span>•</span>
+                                                <span>{group.expensesCount} gastos</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <ReopenGroupButton groupId={group.id} canReopen={group.created_by === user.id} />
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-10 bg-zinc-900/20 border border-white/5 rounded-3xl">
+                                <p className="text-zinc-600 text-sm">Todavía no hay grupos cerrados.</p>
+                            </div>
+                        )}
+                    </div>
+                </section>
             </main>
+            {/* DOCK FLOTANTE DE NAVEGACIÓN */}
+            <div className="fixed bottom-6 left-0 w-full px-6 flex justify-center z-40 pointer-events-none">
+                {/* items-center asegura que los botones chicos y el grande se alineen al medio perfecto */}
+                <div className="w-full max-w-xl flex items-center justify-between pointer-events-auto">
+                    
+                    {/* Botones secundarios agrupados a la izquierda */}
+                    <div className="flex items-center gap-3">
+                        <LogoutButton />
+                        <ProfileButton />
+                    </div>
+                    
+                    {/* Botón principal a la derecha */}
+                    <CreateGroupModal />
+                    
+                </div>
+            </div>
         </div>
     );
 }

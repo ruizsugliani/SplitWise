@@ -137,7 +137,6 @@ export function AddExpenseModal({
     }
   };
 
-
   const closeModal = () => {
     setIsOpen(false);
     setAmount("");
@@ -151,6 +150,11 @@ export function AddExpenseModal({
   const numericAmount = parseFloat(amount) || 0;
   const splitCount = selectedPeople.length || 1;
   const perPersonAmount = numericAmount / splitCount;
+
+  // Clases compartidas para inputs
+  const labelStyles = "text-xs font-semibold uppercase tracking-wider block mb-2 text-zinc-400";
+  const inputStyles = "w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 outline-none transition-all placeholder:text-zinc-600 [&>option]:bg-[#121212]";
+
   return (
     <>
       {!onCloseExternal && (
@@ -170,81 +174,77 @@ export function AddExpenseModal({
             onClick={closeModal}
           />
 
-          <div className="relative bg-white text-black w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="relative bg-[#121212] border border-white/10 w-full max-w-sm rounded-3xl p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">
+              <h2 className="text-xl font-bold text-white">
                 {isEditing ? "Editar Gasto" : "Agregar Gasto"}
               </h2>
               <button
                 onClick={closeModal}
-                className="text-zinc-400 hover:text-black transition-colors"
+                className="text-zinc-500 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-800 rounded-full p-2"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Amount */}
-            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
-              <label className="mb-2 block text-sm font-medium text-gray-600">
-                Valor
-              </label>
-
-              <div className="flex gap-2">
-                <div className="flex flex-1 items-center rounded-lg bg-white px-3 py-2">
-                  <span className="mr-2 text-gray-500">$</span>
+            {/* Valor y Moneda agrupados para mejor layout */}
+            <div className="grid grid-cols-[1fr_auto] gap-3 mb-4">
+              {/* Amount */}
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <label className={labelStyles}>Valor</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-500 font-bold text-xl">$</span>
                   <input
                     type="number"
                     placeholder="0.00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full outline-none"
+                    className="w-full bg-transparent outline-none text-2xl font-bold text-white placeholder:text-zinc-700 appearance-none"
                   />
                 </div>
               </div>
+
+              {/* Currency Select */}
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 min-w-25">
+                <label className={labelStyles}>Moneda</label>
+                <select
+                  value={currencyId}
+                  onChange={(e) => setCurrencyId(e.target.value)}
+                  className="w-full bg-transparent outline-none text-white font-medium cursor-pointer [&>option]:bg-[#121212] pt-1"
+                >
+                  {currencies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            {/* Currency Select */}
-            <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium text-gray-600">
-                Moneda
-              </label>
-              <select
-                value={currencyId}
-                onChange={(e) => setCurrencyId(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 bg-white"
-              >
-                {currencies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+
             {/* Description */}
             <div className="mb-4">
-              <label className="text-sm font-bold block mb-2 text-gray-700">
-                Descripción
-              </label>
+              <label className={labelStyles}>Descripción</label>
               <input
                 type="text"
                 autoFocus
-                placeholder="Descripción del Gasto"
+                placeholder="Ej: Cena, Uber, Entradas..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
+                className={inputStyles}
               />
             </div>
 
             {/* Paid by */}
             <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium text-gray-600">
-                Pagado por
-              </label>
+              <label className={labelStyles}>Pagado por</label>
               <select
                 value={paidBy}
                 onChange={(e) => setPaidBy(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2"
+                className={inputStyles}
               >
-                <option value=""></option>
+                <option value="" disabled>Seleccionar miembro...</option>
                 {members.map((p) => (
                   <option key={p.id} value={p.id}>
                     {getMemberName(p)}
@@ -254,69 +254,65 @@ export function AddExpenseModal({
             </div>
 
             {/* Split among */}
-            <div className="mb-2">
-              <label className="mb-2 block text-sm font-medium text-gray-600">
-                Dividir Entre
-              </label>
+            <div className="mb-6">
+              <label className={labelStyles}>Dividir Entre</label>
 
-              <div className="rounded-xl border p-3">
-                <div className="flex items-center justify-between py-2 border-b mb-2">
-                  <label className="flex items-center gap-2 font-medium">
+              <div className="rounded-2xl border border-white/5 bg-black/30 p-2 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-black/20 mb-1 rounded-xl">
+                  <label className="flex items-center gap-3 font-medium text-white cursor-pointer w-full text-sm">
                     <input
                       type="checkbox"
                       checked={allSelected}
                       onChange={toggleAll}
+                      className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer"
                     />
-                    Todos
+                    Seleccionar Todos
                   </label>
                 </div>
-                {members.map((p) => {
-                  const isSelected = selectedPeople.includes(p.id);
+                
+                {/* Lista scrolleable si hay muchos miembros */}
+                <div className="max-h-36 overflow-y-auto custom-scrollbar px-1">
+                  {members.map((p) => {
+                    const isSelected = selectedPeople.includes(p.id);
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between py-2 px-2 hover:bg-white/5 rounded-lg transition-colors"
+                      >
+                        <label className="flex items-center gap-3 cursor-pointer flex-1 text-sm text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => togglePerson(p.id)}
+                            className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer"
+                          />
+                          <span className="truncate max-w-30">{getMemberName(p)}</span>
+                        </label>
 
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between py-2"
-                    >
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => togglePerson(p.id)}
-                        />
-                        {getMemberName(p)}
-                      </label>
-
-                      <span className="text-sm text-gray-500">
-                        {isSelected
-                          ? `$${perPersonAmount.toFixed(2)}`
-                          : "$0.00"}
-                      </span>
-                    </div>
-                  );
-                })}
+                        <span className={`text-sm font-mono ${isSelected ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                          ${isSelected ? perPersonAmount.toFixed(2) : "0.00"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-
-              <p className="mt-1 text-xs text-gray-500">
-                {selectedPeople.length} personas
-              </p>
             </div>
 
             {/* Submit */}
             <button
-              disabled={
-                !amount || !description || !paidBy || !currencyId || selectedPeople.length == 0
-              }
+              disabled={!amount || !description || !paidBy || !currencyId || selectedPeople.length == 0 || loading}
               onClick={handleAddExpense}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:bg-emerald-600/30 disabled:text-white/50 active:scale-[0.98] flex items-center justify-center"
             >
-              {loading ? "Guardando..." : "Confirmar"}
+              {loading ? "Guardando..." : (isEditing ? "Guardar Cambios" : "Confirmar Gasto")}
             </button>
           </div>
         </div>
       )}
+      
       {toastMessage && (
-            <ToastConfirm toastMessage={toastMessage} />
+        <ToastConfirm toastMessage={toastMessage} />
       )}
     </>
   );

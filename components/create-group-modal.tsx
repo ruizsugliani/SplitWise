@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { EMOJIS } from '@/data/features'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
+// import { Button } from '@/components/ui/button'
 
 export function CreateGroupModal() {
   const [isOpen, setIsOpen] = useState(false)
@@ -62,40 +62,42 @@ export function CreateGroupModal() {
 
   return (
     <>
-      <Button 
+      <button 
         onClick={() => setIsOpen(true)}
-        variant="outline"
-        className="fixed bottom-8 right-8 w-14 h-14 bg-white text-black rounded-full shadow-2xl flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all z-20"
+        className="fixed bottom-8 right-6 w-16 h-16 bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-emerald-400 rounded-full shadow-2xl flex items-center justify-center text-3xl hover:bg-emerald-500/30 hover:scale-110 active:scale-95 transition-all z-40"
         title="Crear un nuevo grupo"
       >
         +
-      </Button>
+      </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
           
-          <div className="relative bg-white text-black w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
-            {/* ... Encabezado y Selector de Emojis se mantienen igual ... */}
+          <div className="relative bg-[#121212] border border-white/10 w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
             
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start mb-8">
                <div>
-                 <h2 className="text-2xl font-bold text-gray-900">Crear un nuevo grupo</h2>
-                 <p className="text-zinc-500 text-sm">Comienza a rastrear gastos.</p>
+                 <h2 className="text-2xl font-bold text-white mb-1">Crear grupo</h2>
+                 <p className="text-zinc-500 text-sm">Comienza a rastrear gastos con amigos.</p>
                </div>
-               <button onClick={() => setIsOpen(false)} className="text-zinc-400 hover:text-black text-xl">✕</button>
+               <button onClick={() => setIsOpen(false)} className="text-zinc-500 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-800 rounded-full p-2">
+                 ✕
+               </button>
              </div>
 
              <div className="mb-6">
-               <label className="text-sm font-bold block mb-3 text-gray-800">Elije un emoji</label>
+               <label className="text-xs font-semibold uppercase tracking-wider block mb-3 text-zinc-400">Elige un ícono</label>
                <div className="grid grid-cols-5 gap-2">
                  {EMOJIS.map((emoji) => (
                    <button
                      key={emoji}
                      type="button"
                      onClick={() => setSelectedEmoji(emoji)}
-                     className={`h-12 flex items-center justify-center text-2xl rounded-xl border-2 transition-all ${
-                       selectedEmoji === emoji ? 'border-blue-500 bg-blue-50' : 'border-zinc-100 hover:border-zinc-300'
+                     className={`h-12 flex items-center justify-center text-2xl rounded-xl border transition-all ${
+                       selectedEmoji === emoji 
+                        ? 'border-emerald-500/50 bg-emerald-500/10' 
+                        : 'border-white/5 hover:border-white/20 hover:bg-white/5'
                      }`}
                    >
                      {emoji}
@@ -105,19 +107,19 @@ export function CreateGroupModal() {
              </div>
 
             <div className="mb-8">
-              <label className="text-sm font-bold block mb-3 text-gray-800">Nombre del grupo</label>
+              <label className="text-xs font-semibold uppercase tracking-wider block mb-3 text-zinc-400">Nombre del grupo</label>
               <input
                 type="text"
-                placeholder="e.g., Viaje Verano, Cena Amigos"
+                placeholder="Ej: Viaje a la costa, Asado..."
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="w-full bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
+                className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 outline-none placeholder:text-zinc-600 transition-all"
               />
             </div>
 
             <button
               disabled={!groupName.trim() || loading}
-              className="w-full bg-black text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:bg-emerald-600/50 flex items-center justify-center active:scale-[0.98]"
               onClick={handleCreateGroup}
             >
               {loading ? "Creando..." : "Crear Grupo"}
