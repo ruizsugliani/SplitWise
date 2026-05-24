@@ -83,6 +83,9 @@ export default function ExpenseCard({
     amountDue: es.amount_due,
     totalPaid: es.total_paid
   }))
+  const signerNames = Object.fromEntries(
+    signersOptions.map((signer) => [signer.id, signer.name])
+  )
 
   return (
     <div className={`bg-zinc-900/60 rounded-xl p-4 shadow-sm border ${isFullyPaid ? 'border-emerald-500/30' : 'border-amber-500/30'}`}>
@@ -178,6 +181,7 @@ export default function ExpenseCard({
         <ExpenseHistory 
           expenseId={expense.id}
           currencyCode={currencyCode}
+          signerNames={signerNames}
           onClose={() => setIsLookingAtExpenseHistory(false)}
         />
       )}

@@ -12,16 +12,28 @@ interface Payment {
   id: string
   amount: number
   created_at: string
+  expense_signer_id: string
   member_name: string
+  observations: string | null
+}
+
+interface PaymentQueryResult {
+  id: string
+  amount: number
+  created_at: string
+  expense_signer_id: string
+  observations: string | null
 }
 
 export function ExpenseHistory({ 
   expenseId, 
   currencyCode, 
+  signerNames,
   onClose 
 }: { 
   expenseId: string, 
   currencyCode: string, 
+  signerNames: Record<string, string>,
   onClose: () => void 
 }) {
     const [payments, setPayments] = useState<Payment[]>([])
@@ -68,35 +80,33 @@ export function ExpenseHistory({
             .select(`
             id,
             amount,
-            created_at,
-            expense_signer!inner (
-                expense_id,
-                spending_group_members (
-                member_name,
-                profiles (full_name)
-                )
-            )
+            expense_signer_id,
+            observations,
+            created_at
             `)
-            .eq('expense_signer.expense_id', expenseId)
+            .in('expense_signer_id', Object.keys(signerNames))
             .order('created_at', { ascending: false })
 
         if (!error && data) {
-            const formatted = data
-            .map((p: any) => ({
-                id: p.id,
-                amount: p.amount,
-                created_at: p.created_at,
-                member_name: p.expense_signer.spending_group_members?.member_name || 
-                            p.expense_signer.spending_group_members?.profiles?.full_name || 
-                            'Miembro'
-            }))
+            const formatted = (data as PaymentQueryResult[])
+            .map((p) => {
+                return {
+                  id: p.id,
+                  amount: p.amount,
+                  expense_signer_id: p.expense_signer_id,
+                  observations: p.observations,
+                  created_at: p.created_at,
+                  member_name: signerNames[p.expense_signer_id] ||
+                    'Miembro'
+                }
+            })
             setPayments(formatted)
         }
         setLoading(false)
         }
 
         fetchHistory()
-    }, [expenseId, supabase])
+    }, [expenseId, signerNames, supabase])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -121,8 +131,8 @@ export function ExpenseHistory({
           ) : (
             <div className="space-y-4">
               {payments.map((payment) => (
-                <div key={payment.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex justify-between items-center group">
-                  <div className="space-y-1">
+                <div key={payment.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex justify-between items-start gap-4 group">
+                  <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2 text-sm text-white font-medium">
                       <User className="w-3 h-3 text-zinc-500" />
                       {payment.member_name}
@@ -133,9 +143,14 @@ export function ExpenseHistory({
                         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                       })}
                     </div>
+                    {payment.observations && (
+                      <p className="text-sm text-zinc-300 whitespace-pre-wrap break-words">
+                        {payment.observations}
+                      </p>
+                    )}
                   </div>
                   
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 shrink-0">
                     <div className="text-emerald-400 font-bold">
                       {formatCurrency(payment.amount, currencyCode) + " " + currencyCode}
                     </div>

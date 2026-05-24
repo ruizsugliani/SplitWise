@@ -21,6 +21,7 @@ interface PaymentModalProps {
 
 export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
   const [amount, setAmount] = useState('')
+  const [observations, setObservations] = useState('')
   const [selectedSignerId, setSelectedSignerId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   
@@ -33,6 +34,7 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
     if (isOpen && signers.length > 0) {
       setSelectedSignerId(signers[0].id)
       setAmount('')
+      setObservations('')
     }
   }, [isOpen, signers])
 
@@ -56,13 +58,16 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
       return
     }
 
+    const trimmedObservations = observations.trim()
+
     setLoading(true)
     try {
       const { error } = await supabase
         .from('payments')
         .insert({
           expense_signer_id: selectedSignerId,
-          amount: paymentAmount
+          amount: paymentAmount,
+          observations: trimmedObservations || null
         })
 
       if (error) throw error
@@ -129,6 +134,17 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
               className="w-full bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-green-500 outline-none text-xl"
               required
               disabled={remainingDebt <= 0} // Deshabilitar si ya no hay deuda
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">Observaciones</label>
+            <textarea
+              value={observations}
+              onChange={(e) => setObservations(e.target.value)}
+              placeholder="Opcional: transferencia parcial, efectivo, comprobante, etc."
+              className="w-full min-h-24 resize-none bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-green-500 outline-none text-base"
+              maxLength={300}
             />
           </div>
 
