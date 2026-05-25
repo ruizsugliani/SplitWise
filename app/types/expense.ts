@@ -19,6 +19,7 @@ export interface Expense {
   split_between: number
   member_ids?: string[]; // Lo mantenemos porque lo usa el modal de edición
   currency_id: string;
+  receipt_url?: string | null;
 }
 
 export type ExpenseWithSigners = Expense & {

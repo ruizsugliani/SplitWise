@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { X, Calendar, User, Receipt, Trash2, Loader2 } from "lucide-react"
+import { X, Calendar, User, Receipt, Trash2, Loader2, Paperclip } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
 import { removePayment } from "@/app/actions/payments"
 import { useRouter } from "next/navigation"
@@ -15,6 +15,8 @@ interface Payment {
   expense_signer_id: string
   member_name: string
   observations: string | null
+  payment_method: string | null
+  receipt_url: string | null
 }
 
 interface PaymentQueryResult {
@@ -23,6 +25,33 @@ interface PaymentQueryResult {
   created_at: string
   expense_signer_id: string
   observations: string | null
+  payment_method: string | null
+  receipt_url: string | null
+}
+
+function ViewReceiptButton({ path }: { path: string }) {
+  const [loading, setLoading] = useState(false)
+  const supabase = createClient()
+
+  const handleClick = async () => {
+    setLoading(true)
+    const { data, error } = await supabase.storage
+      .from('payment-receipts')
+      .createSignedUrl(path, 60)
+    setLoading(false)
+    if (!error && data) window.open(data.signedUrl, '_blank')
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      title="Ver comprobante"
+      className="text-zinc-400 hover:text-white transition disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+    </button>
+  )
 }
 
 export function ExpenseHistory({ 
@@ -82,6 +111,8 @@ export function ExpenseHistory({
             amount,
             expense_signer_id,
             observations,
+            payment_method,
+            receipt_url,
             created_at
             `)
             .in('expense_signer_id', Object.keys(signerNames))
@@ -95,6 +126,8 @@ export function ExpenseHistory({
                   amount: p.amount,
                   expense_signer_id: p.expense_signer_id,
                   observations: p.observations,
+                  payment_method: p.payment_method,
+                  receipt_url: p.receipt_url,
                   created_at: p.created_at,
                   member_name: signerNames[p.expense_signer_id] ||
                     'Miembro'
@@ -133,15 +166,25 @@ export function ExpenseHistory({
               {payments.map((payment) => (
                 <div key={payment.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex justify-between items-start gap-4 group">
                   <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm text-white font-medium">
+                    <div className="flex items-center gap-2 text-sm text-white font-medium flex-wrap">
                       <User className="w-3 h-3 text-zinc-500" />
                       {payment.member_name}
+                      <div className="flex items-center gap-1.5">
+                        {payment.payment_method && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/10 text-zinc-300">
+                            {payment.payment_method}
+                          </span>
+                        )}
+                        {payment.receipt_url && <ViewReceiptButton path={payment.receipt_url} />}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(payment.created_at).toLocaleDateString('es-ES', {
-                        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      })}
+                      <Calendar className="w-3 h-3 shrink-0" />
+                      <span className="whitespace-nowrap">
+                        {new Date(payment.created_at).toLocaleString('es-ES', {
+                          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </span>
                     </div>
                     {payment.observations && (
                       <p className="text-sm text-zinc-300 whitespace-pre-wrap break-words">

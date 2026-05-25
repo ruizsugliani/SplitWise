@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Banknote } from 'lucide-react'
+import { Banknote, Paperclip, Loader2 } from 'lucide-react'
 
 // Definimos un tipo para la información que necesitamos de cada involucrado
 export interface SignerOption {
@@ -19,10 +19,15 @@ interface PaymentModalProps {
   signers: SignerOption[] // Los miembros involucrados en este gasto
 }
 
+const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'Otro'] as const
+type PaymentMethod = typeof PAYMENT_METHODS[number]
+
 export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
   const [amount, setAmount] = useState('')
   const [observations, setObservations] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Transferencia')
   const [selectedSignerId, setSelectedSignerId] = useState<string>('')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   
   const supabase = createClient()
@@ -35,6 +40,8 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
       setSelectedSignerId(signers[0].id)
       setAmount('')
       setObservations('')
+      setPaymentMethod('Transferencia')
+      setReceiptFile(null)
     }
   }, [isOpen, signers])
 
@@ -62,12 +69,25 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
 
     setLoading(true)
     try {
+      let receiptPath: string | null = null
+      if (receiptFile) {
+        const fileExt = receiptFile.name.split('.').pop()
+        const filePath = `${selectedSignerId}-${Math.random()}.${fileExt}`
+        const { error: uploadError } = await supabase.storage
+          .from('payment-receipts')
+          .upload(filePath, receiptFile)
+        if (uploadError) throw uploadError
+        receiptPath = filePath
+      }
+
       const { error } = await supabase
         .from('payments')
         .insert({
           expense_signer_id: selectedSignerId,
           amount: paymentAmount,
-          observations: trimmedObservations || null
+          observations: trimmedObservations || null,
+          payment_method: paymentMethod,
+          receipt_url: receiptPath
         })
 
       if (error) throw error
@@ -138,13 +158,47 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
           </div>
 
           <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">Medio de pago</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              className="w-full bg-zinc-100 border-none rounded-xl p-3 focus:ring-2 focus:ring-green-500 outline-none text-base"
+            >
+              {PAYMENT_METHODS.map((method) => (
+                <option key={method} value={method}>{method}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Observaciones</label>
             <textarea
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
               placeholder="Opcional: transferencia parcial, efectivo, comprobante, etc."
               className="w-full min-h-24 resize-none bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-green-500 outline-none text-base"
-              maxLength={300}
+              maxLength={280}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">Comprobante (opcional)</label>
+            <label
+              htmlFor="receipt-upload"
+              className={`flex items-center gap-2 cursor-pointer bg-zinc-100 rounded-xl p-3 hover:bg-zinc-200 transition ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              <Paperclip className="w-4 h-4 text-zinc-500 shrink-0" />
+              <span className="text-sm text-zinc-600 truncate">
+                {receiptFile ? receiptFile.name : 'Adjuntar imagen...'}
+              </span>
+            </label>
+            <input
+              id="receipt-upload"
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+              disabled={loading}
             />
           </div>
 
@@ -160,7 +214,12 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
               disabled={loading || !amount || remainingDebt <= 0}
               className="flex-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition disabled:opacity-50"
             >
-              {loading ? "Procesando..." : "Confirmar"}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {receiptFile ? 'Subiendo...' : 'Procesando...'}
+                </span>
+              ) : 'Confirmar'}
             </button>
           </div>
         </form>
