@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Receipt, X } from "lucide-react";
+import { Receipt, X, Paperclip, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Expense } from "@/app/types/expense";
@@ -38,6 +38,7 @@ export function AddExpenseModal({
   const [paidBy, setPaidBy] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [currencyId, setCurrencyId] = useState("");
 
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -83,6 +84,18 @@ export function AddExpenseModal({
           p_currency_id: currencyId,
         });
         if (error) throw error;
+
+        if (receiptFile) {
+          if (expenseToEdit.receipt_url) {
+            await supabase.storage.from('expense-receipts').remove([expenseToEdit.receipt_url])
+          }
+          const fileExt = receiptFile.name.split('.').pop()
+          const filePath = `${expenseToEdit.id}-${Math.random()}.${fileExt}`
+          const { error: uploadError } = await supabase.storage.from('expense-receipts').upload(filePath, receiptFile)
+          if (uploadError) throw uploadError
+          const { error: updateError } = await supabase.from('expenses').update({ receipt_url: filePath }).eq('id', expenseToEdit.id)
+          if (updateError) throw updateError
+        }
       } else {
         const { error } = await supabase.rpc("create_expense_with_signers", {
           p_spending_group_id: groupId,
@@ -93,8 +106,27 @@ export function AddExpenseModal({
           p_member_ids: selectedPeople,
           p_currency_id: currencyId,
         });
-
         if (error) throw error;
+
+        if (receiptFile) {
+          const { data: newExpense } = await supabase
+            .from('expenses')
+            .select('id')
+            .eq('spending_group_id', groupId)
+            .eq('created_by', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+          if (newExpense) {
+            const fileExt = receiptFile.name.split('.').pop()
+            const filePath = `${newExpense.id}-${Math.random()}.${fileExt}`
+            const { error: uploadError } = await supabase.storage.from('expense-receipts').upload(filePath, receiptFile)
+            if (uploadError) throw uploadError
+            const { error: updateError } = await supabase.from('expenses').update({ receipt_url: filePath }).eq('id', newExpense.id)
+            if (updateError) throw updateError
+          }
+        }
     }
       const successMsg = `Gasto ${isEditing ? "editado" : "guardado"} correctamente`;
       closeModal();
@@ -143,6 +175,7 @@ export function AddExpenseModal({
     setDescription("");
     setPaidBy("");
     setSelectedPeople([]);
+    setReceiptFile(null);
     if (onCloseExternal) onCloseExternal();
   };
 
@@ -299,13 +332,40 @@ export function AddExpenseModal({
               </div>
             </div>
 
+            {/* Comprobante */}
+            <div className="mb-6">
+              <label className={labelStyles}>Ticket / Comprobante (opcional)</label>
+              <label
+                htmlFor="expense-receipt-upload"
+                className={`flex items-center gap-2 cursor-pointer ${inputStyles} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                <Paperclip className="w-4 h-4 text-zinc-500 shrink-0" />
+                <span className="text-sm truncate">
+                  {receiptFile ? receiptFile.name : 'Adjuntar imagen o PDF...'}
+                </span>
+              </label>
+              <input
+                id="expense-receipt-upload"
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                disabled={loading}
+              />
+            </div>
+
             {/* Submit */}
             <button
               disabled={!amount || !description || !paidBy || !currencyId || selectedPeople.length == 0 || loading}
               onClick={handleAddExpense}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:bg-emerald-600/30 disabled:text-white/50 active:scale-[0.98] flex items-center justify-center"
             >
-              {loading ? "Guardando..." : (isEditing ? "Guardar Cambios" : "Confirmar Gasto")}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {receiptFile ? 'Subiendo...' : 'Guardando...'}
+                </span>
+              ) : (isEditing ? "Guardar Cambios" : "Confirmar Gasto")}
             </button>
           </div>
         </div>

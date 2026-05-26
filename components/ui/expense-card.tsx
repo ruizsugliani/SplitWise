@@ -1,8 +1,9 @@
 "use client"
 
 import { Expense, ExpenseProps } from "@/app/types/expense";
-import { MoreVertical, Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
+import { MoreVertical, Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt, Paperclip, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { ConfirmModal } from "./confirm-modal";
 import { useRouter } from 'next/navigation'
 import { removeExpense } from "@/app/actions/expenses";
@@ -11,6 +12,7 @@ import { AddExpenseModal } from "../add-expense-modal";
 import { ExpenseHistory } from "../expense-history-modal";
 import { formatCurrency } from "@/app/types/currency";
 import { PaymentModal } from "../payment-modal";
+
 
 const formatDate = (dateString: string) => {
   return new Intl.DateTimeFormat("es-ES", {
@@ -35,7 +37,18 @@ export default function ExpenseCard({
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
   const expenseCurrency = currencies.find(c => c.id === expense.currency_id);
-  const currencyCode = expenseCurrency?.code || 'ARS';const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const currencyCode = expenseCurrency?.code || 'ARS';
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false)
+  const supabase = createClient()
+
+  const handleViewReceipt = async () => {
+    if (!expense.receipt_url) return
+    setReceiptLoading(true)
+    const { data, error } = await supabase.storage.from('expense-receipts').createSignedUrl(expense.receipt_url, 60)
+    setReceiptLoading(false)
+    if (!error && data) window.open(data.signedUrl, '_blank')
+  }
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,6 +96,9 @@ export default function ExpenseCard({
     amountDue: es.amount_due,
     totalPaid: es.total_paid
   }))
+  const signerNames = Object.fromEntries(
+    signersOptions.map((signer) => [signer.id, signer.name])
+  )
 
   return (
     <div className={`bg-zinc-900/60 rounded-xl p-4 shadow-sm border ${isFullyPaid ? 'border-emerald-500/30' : 'border-amber-500/30'}`}>
@@ -96,8 +112,13 @@ export default function ExpenseCard({
               <AlertCircle className="w-4 h-4 text-amber-500" />
             )}
           </h3>
-          {/* Usamos la propiedad que ya viene lista desde el page.tsx */}
-          <p className="text-sm text-zinc-400">Pagado por {expense.paid_by_member_name}</p>
+          <p className="text-sm text-zinc-400">
+            Pagado por {expense.paid_by_member_name}{expense.receipt_url && (
+              <button onClick={handleViewReceipt} disabled={receiptLoading} title="Ver comprobante" className="ml-1 align-middle text-zinc-500 hover:text-white transition disabled:opacity-50">
+                {receiptLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : <Paperclip className="w-3.5 h-3.5 inline" />}
+              </button>
+            )}
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -178,6 +199,7 @@ export default function ExpenseCard({
         <ExpenseHistory 
           expenseId={expense.id}
           currencyCode={currencyCode}
+          signerNames={signerNames}
           onClose={() => setIsLookingAtExpenseHistory(false)}
         />
       )}

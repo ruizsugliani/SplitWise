@@ -95,6 +95,7 @@ export default async function SpendingGroupDashboardPage({
       created_at,
       paid_by,
       currency_id,
+      receipt_url,
       spending_group_members!expendings_paid_by_fkey (
         member_name,
         profiles ( full_name )
@@ -184,6 +185,7 @@ export default async function SpendingGroupDashboardPage({
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
       currency_id: String(e.currency_id || defaultCurrencyId),
+      receipt_url: (e.receipt_url as string | null | undefined) ?? null,
     }
   })
 
