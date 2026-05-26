@@ -93,12 +93,14 @@ export default async function SpendingGroupDashboardPage({
       description,
       value,
       created_at,
-      paid_by,
       currency_id,
-      receipt_url,
-      spending_group_members!expendings_paid_by_fkey (
-        member_name,
-        profiles ( full_name )
+      expense_payers (
+        spending_group_member_id,
+        amount_paid,
+        spending_group_members (
+          member_name,
+          profiles ( full_name )
+        )
       ),
       expense_signer!expense_signer_expense_id_fkey (
         id,
@@ -121,12 +123,27 @@ export default async function SpendingGroupDashboardPage({
     const e = raw as Record<string, unknown>
     const signersRaw = Array.isArray(e.expense_signer) ? (e.expense_signer as unknown[]) : []
 
-    const payerRaw = e.spending_group_members;
-    const payerObj = Array.isArray(payerRaw) 
-      ? payerRaw[0] 
-      : (payerRaw as { member_name?: string; profiles?: { full_name?: string } } | null);
+    // MAPEO ACTUALIZADO: Procesamos la nueva tabla expense_payers
+    const payersRaw = Array.isArray(e.expense_payers) ? e.expense_payers : [];
+    let paidByName = 'Desconocido';
+    let firstPayerId = '';
+
+    if (payersRaw.length > 0) {
+      const firstPayer = payersRaw[0] as any;
+      firstPayerId = String(firstPayer.spending_group_member_id || '');
       
-    const paidByName = payerObj?.member_name || payerObj?.profiles?.full_name || 'Desconocido';
+      const memberObj = Array.isArray(firstPayer.spending_group_members) 
+        ? firstPayer.spending_group_members[0] 
+        : firstPayer.spending_group_members;
+        
+      const firstName = memberObj?.profiles?.full_name || memberObj?.member_name || 'Alguien';
+      
+      if (payersRaw.length === 1) {
+        paidByName = firstName;
+      } else {
+        paidByName = `${firstName} y ${payersRaw.length - 1} más`;
+      }
+    }
 
     const normalizeMember = (m: unknown): Member | null => {
       if (!m) return null
@@ -179,14 +196,17 @@ export default async function SpendingGroupDashboardPage({
       id: String(e.id ?? ''),
       description: (e.description as string | undefined) ?? '',
       created_at: (e.created_at as string | undefined) ?? '',
-      paid_by: String(e.paid_by ?? ''),
+      paid_by: firstPayerId, // Dejamos el ID del primer pagador por si la UI requiere un string simple
       paid_by_member_name: paidByName,
+      payers: payersRaw.map((p: any) => ({
+        member_id: String(p.spending_group_member_id || ''),
+        amount: Number(p.amount_paid || 0)
+      })),
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
       currency_id: String(e.currency_id || defaultCurrencyId),
-      receipt_url: (e.receipt_url as string | null | undefined) ?? null,
-    }
+    } as any // Forzamos cast en caso de que ExpenseWithSigners necesite ser actualizado
   })
 
   const expensesForClient = calcExpenses.map((e) => ({
