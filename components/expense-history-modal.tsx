@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { X, Calendar, User, Receipt, Trash2, Loader2, Paperclip } from "lucide-react"
+import { X, Calendar, User, Receipt, Trash2, Loader2, Paperclip, Pencil } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
-import { removePayment } from "@/app/actions/payments"
+import { removePayment, updatePayment } from "@/app/actions/payments"
 import { useRouter } from "next/navigation"
 import { ConfirmModal } from "./ui/confirm-modal"
 
@@ -12,6 +12,7 @@ interface Payment {
   id: string
   amount: number
   created_at: string
+  paid_at: string | null
   expense_signer_id: string
   member_name: string
   observations: string | null
@@ -23,10 +24,28 @@ interface PaymentQueryResult {
   id: string
   amount: number
   created_at: string
+  paid_at: string | null
   expense_signer_id: string
   observations: string | null
   payment_method: string | null
   receipt_url: string | null
+}
+
+function toDisplayDate(dateValue: string) {
+  return new Date(dateValue).toLocaleString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function toDateTimeLocalValue(dateValue: string) {
+  const date = new Date(dateValue)
+  const offset = date.getTimezoneOffset()
+  const localDate = new Date(date.getTime() - offset * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 function ViewReceiptButton({ path }: { path: string }) {
@@ -68,8 +87,12 @@ export function ExpenseHistory({
     const [payments, setPayments] = useState<Payment[]>([])
     const [loading, setLoading] = useState(true)
     const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null)
+    const [paymentToEdit, setPaymentToEdit] = useState<Payment | null>(null)
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
+    const [isSavingEdit, setIsSavingEdit] = useState<string | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [editAmount, setEditAmount] = useState("")
+    const [editDateTime, setEditDateTime] = useState("")
     const [toastMessage, setToastMessage] = useState<string | null>(null)
     const supabase = createClient()
     const router = useRouter()
@@ -95,6 +118,53 @@ export function ExpenseHistory({
         setDeletingId(null)
     }
 
+    const handleStartEdit = (payment: Payment) => {
+        const effectiveDate = payment.paid_at || payment.created_at
+        setPaymentToEdit(payment)
+        setEditAmount(String(payment.amount))
+        setEditDateTime(toDateTimeLocalValue(effectiveDate))
+    }
+
+    const handleSaveEdit = async () => {
+        if (!paymentToEdit) return
+
+        const parsedAmount = Number(editAmount)
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            alert("Ingresá un monto válido.")
+            return
+        }
+
+        if (!editDateTime) {
+            alert("Ingresá una fecha y hora válidas.")
+            return
+        }
+
+        setIsSavingEdit(paymentToEdit.id)
+
+        const paidAtIso = new Date(editDateTime).toISOString()
+        const result = await updatePayment(paymentToEdit.id, {
+            amount: parsedAmount,
+            paidAt: paidAtIso,
+        })
+
+        if (result.success) {
+            setPayments((prev) =>
+                prev.map((payment) =>
+                    payment.id === paymentToEdit.id
+                        ? { ...payment, amount: parsedAmount, paid_at: paidAtIso }
+                        : payment
+                )
+            )
+            setToastMessage("Pago editado correctamente")
+            setPaymentToEdit(null)
+            router.refresh()
+        } else {
+            setToastMessage("No se pudo editar el pago")
+        }
+
+        setIsSavingEdit(null)
+    }
+
     useEffect(() => {
         if (toastMessage) {
         const timer = setTimeout(() => setToastMessage(null), 3000)
@@ -109,6 +179,7 @@ export function ExpenseHistory({
             .select(`
             id,
             amount,
+            paid_at,
             expense_signer_id,
             observations,
             payment_method,
@@ -116,7 +187,7 @@ export function ExpenseHistory({
             created_at
             `)
             .in('expense_signer_id', Object.keys(signerNames))
-            .order('created_at', { ascending: false })
+            .order('paid_at', { ascending: false })
 
         if (!error && data) {
             const formatted = (data as PaymentQueryResult[])
@@ -124,6 +195,7 @@ export function ExpenseHistory({
                 return {
                   id: p.id,
                   amount: p.amount,
+                  paid_at: p.paid_at,
                   expense_signer_id: p.expense_signer_id,
                   observations: p.observations,
                   payment_method: p.payment_method,
@@ -181,9 +253,7 @@ export function ExpenseHistory({
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
                       <Calendar className="w-3 h-3 shrink-0" />
                       <span className="whitespace-nowrap">
-                        {new Date(payment.created_at).toLocaleString('es-ES', {
-                          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
+                        {toDisplayDate(payment.paid_at || payment.created_at)}
                       </span>
                     </div>
                     {payment.observations && (
@@ -193,10 +263,18 @@ export function ExpenseHistory({
                     )}
                   </div>
                   
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                     <div className="text-emerald-400 font-bold">
                       {formatCurrency(payment.amount, currencyCode) + " " + currencyCode}
                     </div>
+                    <button
+                        onClick={() => handleStartEdit(payment)}
+                        disabled={Boolean(isSavingEdit)}
+                        className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                        title="Editar pago"
+                        >
+                        <Pencil className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={() => {setPaymentToDelete(payment)}}
                         disabled={deletingId === payment.id}
@@ -233,9 +311,7 @@ export function ExpenseHistory({
                   Vas a eliminar el pago realizado por <span className="text-white font-semibold">{paymentToDelete.member_name}</span> del día
                   <br />
                   <span className="text-white font-semibold">
-                      {new Date(paymentToDelete.created_at).toLocaleDateString('es-ES', {
-                          day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      })}
+                      {toDisplayDate(paymentToDelete.paid_at || paymentToDelete.created_at)}
                   </span> 
                   <br />
                   por un monto de <span className="text-white font-semibold">{formatCurrency(paymentToDelete.amount, currencyCode) + " " + currencyCode}</span>.
@@ -248,6 +324,73 @@ export function ExpenseHistory({
               onConfirm={handleDeletePayment}
               onCancel={() => setPaymentToDelete(null)}
           />
+        )}
+
+        {paymentToEdit && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold text-white">Editar pago</h3>
+                <button
+                  onClick={() => setPaymentToEdit(null)}
+                  disabled={Boolean(isSavingEdit)}
+                  className="p-2 hover:bg-white/5 rounded-full transition-colors disabled:opacity-50"
+                >
+                  <X className="w-4 h-4 text-zinc-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">Monto</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">Fecha y hora</label>
+                  <input
+                    type="datetime-local"
+                    value={editDateTime}
+                    onChange={(e) => setEditDateTime(e.target.value)}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setPaymentToEdit(null)}
+                  disabled={Boolean(isSavingEdit)}
+                  className="flex-1 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={Boolean(isSavingEdit)}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSavingEdit === paymentToEdit.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    "Guardar"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

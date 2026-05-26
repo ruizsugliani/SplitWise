@@ -21,3 +21,29 @@ export async function removePayment(paymentId: string, pathToRevalidate?: string
 
   return { success: true }
 }
+
+export async function updatePayment(
+  paymentId: string,
+  payload: { amount: number; paidAt: string },
+  pathToRevalidate?: string
+) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('payments')
+    .update({
+      amount: payload.amount,
+      paid_at: payload.paidAt,
+    })
+    .eq('id', paymentId)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  if (pathToRevalidate) {
+    revalidatePath(pathToRevalidate)
+  }
+
+  return { success: true }
+}
