@@ -87,7 +87,8 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
           amount: paymentAmount,
           observations: trimmedObservations || null,
           payment_method: paymentMethod,
-          receipt_url: receiptPath
+          receipt_url: receiptPath,
+          paid_at: new Date().toISOString()
         })
 
       if (error) throw error
