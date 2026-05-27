@@ -22,8 +22,14 @@ export interface Expense {
   receipt_url?: string | null;
 }
 
+export interface ExpensePayer {
+  member_id: string
+  amount: number
+}
+
 export type ExpenseWithSigners = Expense & {
   expense_signer: ExpenseSigner[];
+  payers?: ExpensePayer[];
   currentUserSigner?: ExpenseSigner | null;
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { X, Calendar, User, Receipt, Trash2, Loader2, Paperclip, Pencil } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
@@ -77,11 +77,13 @@ export function ExpenseHistory({
   expenseId, 
   currencyCode, 
   signerNames,
+  groupPath,
   onClose 
 }: { 
   expenseId: string, 
   currencyCode: string, 
   signerNames: Record<string, string>,
+  groupPath: string,
   onClose: () => void 
 }) {
     const [payments, setPayments] = useState<Payment[]>([])
@@ -96,6 +98,41 @@ export function ExpenseHistory({
     const [toastMessage, setToastMessage] = useState<string | null>(null)
     const supabase = createClient()
     const router = useRouter()
+
+    const fetchHistory = useCallback(async () => {
+        const { data, error } = await supabase
+            .from('payments')
+            .select(`
+            id,
+            amount,
+            paid_at,
+            expense_signer_id,
+            observations,
+            payment_method,
+            receipt_url,
+            created_at
+            `)
+            .in('expense_signer_id', Object.keys(signerNames))
+            .order('paid_at', { ascending: false })
+
+        if (!error && data) {
+            const formatted = (data as PaymentQueryResult[])
+            .map((p) => ({
+                id: p.id,
+                amount: p.amount,
+                paid_at: p.paid_at,
+                expense_signer_id: p.expense_signer_id,
+                observations: p.observations,
+                payment_method: p.payment_method,
+                receipt_url: p.receipt_url,
+                created_at: p.created_at,
+                member_name: signerNames[p.expense_signer_id] || 'Miembro'
+            }))
+            setPayments(formatted)
+        }
+
+        setLoading(false)
+    }, [signerNames, supabase])
     
     const handleDeletePayment = async () => {
         if (!paymentToDelete) return
@@ -105,13 +142,15 @@ export function ExpenseHistory({
         setIsDeleting(paymentId)
         setDeletingId(paymentId)
 
-        const result = await removePayment(paymentId)
+        const result = await removePayment(paymentId, groupPath)
 
         if (result.success) {
             setToastMessage("Gasto eliminado correctamente")
             setPayments(prev => prev.filter(p => p.id !== paymentId))
+            await fetchHistory()
             router.refresh()
         } else {
+            alert(result.error || "No se pudo eliminar el pago")
             setToastMessage("No se pudo eliminar el pago")
         }
         setIsDeleting(null)
@@ -145,20 +184,34 @@ export function ExpenseHistory({
         const result = await updatePayment(paymentToEdit.id, {
             amount: parsedAmount,
             paidAt: paidAtIso,
-        })
+        }, groupPath)
 
         if (result.success) {
+            const updatedPayment = result.payment
+            if (!updatedPayment) {
+                alert("El pago no devolvio datos actualizados.")
+                setToastMessage("No se pudo confirmar la edicion del pago")
+                setIsSavingEdit(null)
+                return
+            }
+
             setPayments((prev) =>
                 prev.map((payment) =>
                     payment.id === paymentToEdit.id
-                        ? { ...payment, amount: parsedAmount, paid_at: paidAtIso }
+                        ? {
+                            ...payment,
+                            amount: updatedPayment.amount,
+                            paid_at: updatedPayment.paid_at,
+                          }
                         : payment
                 )
             )
+            await fetchHistory()
             setToastMessage("Pago editado correctamente")
             setPaymentToEdit(null)
             router.refresh()
         } else {
+            alert(result.error || "No se pudo editar el pago")
             setToastMessage("No se pudo editar el pago")
         }
 
@@ -173,45 +226,12 @@ export function ExpenseHistory({
     }, [toastMessage])
 
     useEffect(() => {
-        async function fetchHistory() {
-        const { data, error } = await supabase
-            .from('payments')
-            .select(`
-            id,
-            amount,
-            paid_at,
-            expense_signer_id,
-            observations,
-            payment_method,
-            receipt_url,
-            created_at
-            `)
-            .in('expense_signer_id', Object.keys(signerNames))
-            .order('paid_at', { ascending: false })
-
-        if (!error && data) {
-            const formatted = (data as PaymentQueryResult[])
-            .map((p) => {
-                return {
-                  id: p.id,
-                  amount: p.amount,
-                  paid_at: p.paid_at,
-                  expense_signer_id: p.expense_signer_id,
-                  observations: p.observations,
-                  payment_method: p.payment_method,
-                  receipt_url: p.receipt_url,
-                  created_at: p.created_at,
-                  member_name: signerNames[p.expense_signer_id] ||
-                    'Miembro'
-                }
-            })
-            setPayments(formatted)
-        }
-        setLoading(false)
+        const loadHistory = async () => {
+            await fetchHistory()
         }
 
-        fetchHistory()
-    }, [expenseId, signerNames, supabase])
+        void loadHistory()
+    }, [expenseId, fetchHistory])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

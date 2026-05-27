@@ -11,7 +11,7 @@ import Link from 'next/link'
 import { formatCurrency } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
-import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
+import { ExpensePayer, ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
 import { EditGroupModal } from '@/components/edit-group-modal'
 import { memberHasPendingDebt, getCurrentMember } from '@/lib/utils/pending-debt'
 import LeaveGroupButton from '@/components/leave-group-button'
@@ -25,6 +25,21 @@ type GroupQuery = {
   closed_at: string | null
   members: Member[]
   expenses: ExpenseWithSigners[]
+}
+
+type RawExpensePayer = {
+  spending_group_member_id?: string
+  amount_paid?: number | string
+  spending_group_members?:
+    | {
+        member_name?: string
+        profiles?: { full_name?: string | null } | { full_name?: string | null }[] | null
+      }
+    | {
+        member_name?: string
+        profiles?: { full_name?: string | null } | { full_name?: string | null }[] | null
+      }[]
+    | null
 }
 
 export default async function SpendingGroupDashboardPage({
@@ -85,6 +100,11 @@ export default async function SpendingGroupDashboardPage({
 
   const members = baseGroup.members || []
   const membersById = new Map(members.map((m) => [m.id, m]))
+  const membersByProfileId = new Map(
+    members
+      .filter((member) => member.profile_id)
+      .map((member) => [member.profile_id as string, member])
+  )
 
   const { data: expensesData, error: expensesError } = await supabase
     .from('expenses')
@@ -93,6 +113,7 @@ export default async function SpendingGroupDashboardPage({
       description,
       value,
       created_at,
+      paid_by,
       currency_id,
       expense_payers (
         spending_group_member_id,
@@ -124,25 +145,44 @@ export default async function SpendingGroupDashboardPage({
     const signersRaw = Array.isArray(e.expense_signer) ? (e.expense_signer as unknown[]) : []
 
     // MAPEO ACTUALIZADO: Procesamos la nueva tabla expense_payers
-    const payersRaw = Array.isArray(e.expense_payers) ? e.expense_payers : [];
+    const payersRaw = Array.isArray(e.expense_payers) ? (e.expense_payers as RawExpensePayer[]) : [];
     let paidByName = 'Desconocido';
     let firstPayerId = '';
+    const legacyPaidBy = String(e.paid_by ?? '')
 
     if (payersRaw.length > 0) {
-      const firstPayer = payersRaw[0] as any;
+      const firstPayer = payersRaw[0]
       firstPayerId = String(firstPayer.spending_group_member_id || '');
       
       const memberObj = Array.isArray(firstPayer.spending_group_members) 
         ? firstPayer.spending_group_members[0] 
         : firstPayer.spending_group_members;
+
+      const profileObj = Array.isArray(memberObj?.profiles)
+        ? memberObj.profiles[0]
+        : memberObj?.profiles
         
-      const firstName = memberObj?.profiles?.full_name || memberObj?.member_name || 'Alguien';
+      const firstName = profileObj?.full_name || memberObj?.member_name || 'Alguien';
       
       if (payersRaw.length === 1) {
         paidByName = firstName;
       } else {
         paidByName = `${firstName} y ${payersRaw.length - 1} más`;
       }
+    }
+
+    const normalizedPaidBy =
+      firstPayerId ||
+      (membersById.has(legacyPaidBy)
+        ? legacyPaidBy
+        : (membersByProfileId.get(legacyPaidBy)?.id ?? ''))
+
+    if (!firstPayerId && normalizedPaidBy) {
+      const payerMember = membersById.get(normalizedPaidBy)
+      paidByName =
+        payerMember?.profiles?.full_name ||
+        payerMember?.member_name ||
+        paidByName
     }
 
     const normalizeMember = (m: unknown): Member | null => {
@@ -192,21 +232,23 @@ export default async function SpendingGroupDashboardPage({
       }
     })
 
+    const expensePayers: ExpensePayer[] = payersRaw.map((payer) => ({
+      member_id: String(payer.spending_group_member_id || ''),
+      amount: Number(payer.amount_paid || 0),
+    }))
+
     return {
       id: String(e.id ?? ''),
       description: (e.description as string | undefined) ?? '',
       created_at: (e.created_at as string | undefined) ?? '',
-      paid_by: firstPayerId, // Dejamos el ID del primer pagador por si la UI requiere un string simple
+      paid_by: normalizedPaidBy,
       paid_by_member_name: paidByName,
-      payers: payersRaw.map((p: any) => ({
-        member_id: String(p.spending_group_member_id || ''),
-        amount: Number(p.amount_paid || 0)
-      })),
+      payers: expensePayers,
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
       currency_id: String(e.currency_id || defaultCurrencyId),
-    } as any // Forzamos cast en caso de que ExpenseWithSigners necesite ser actualizado
+    }
   })
 
   const expensesForClient = calcExpenses.map((e) => ({

@@ -200,6 +200,7 @@ export default function ExpenseCard({
           expenseId={expense.id}
           currencyCode={currencyCode}
           signerNames={signerNames}
+          groupPath={`/spending-groups/${groupId}`}
           onClose={() => setIsLookingAtExpenseHistory(false)}
         />
       )}
