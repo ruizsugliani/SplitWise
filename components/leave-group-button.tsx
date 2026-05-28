@@ -6,14 +6,10 @@ import { leaveGroup } from '@/app/actions/leave-group'
 
 type Props = {
   groupId: string
-  disabled: boolean
-  debtMessage?: string
 }
 
 export default function LeaveGroupButton({
   groupId,
-  disabled,
-  debtMessage,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -35,37 +31,15 @@ export default function LeaveGroupButton({
     <>
       <div className="relative group w-full">
         <button
-          disabled={disabled}
           onClick={() => setOpen(true)}
           className={`
-            w-full flex items-center justify-center gap-2  rounded-2xl p-4 font-semibold hover:bg-red-500/20 transition-all
-            ${
-              disabled
-                ? 'bg-orange-900/40 text-orange-300/40 cursor-not-allowed opacity-50 '
-                : 'scale-[0.98] bg-red-500/10 text-red-400 border border-red-500/20'
-            }
+            w-full flex items-center justify-center gap-2 rounded-2xl p-4 font-semibold hover:bg-red-500/20 transition-all bg-orange-500/20
           `}
         >
           <LogOut className="w-5 h-5" />
 
           <span>Salir del grupo</span>
         </button>
-
-        {disabled && debtMessage && (
-          <div
-            className="
-              absolute left-1/2 -translate-x-1/2 bottom-full mb-2
-              opacity-0 group-hover:opacity-100
-              transition-opacity duration-200
-              pointer-events-none
-              z-50
-            "
-          >
-            <div className="bg-zinc-800 text-white text-xs rounded-xl px-3 py-2 border border-white/10 whitespace-nowrap shadow-lg">
-              {debtMessage}
-            </div>
-          </div>
-        )}
       </div>
 
       {open && (
