@@ -13,7 +13,7 @@ interface Payment {
   amount: number
   created_at: string
   paid_at: string | null
-  expense_signer_id: string
+  //expense_signer_id: string
   member_name: string
   observations: string | null
   payment_method: string | null
@@ -25,10 +25,22 @@ interface PaymentQueryResult {
   amount: number
   created_at: string
   paid_at: string | null
-  expense_signer_id: string
+  //expense_signer_id: string
   observations: string | null
   payment_method: string | null
   receipt_url: string | null
+  debts: {
+    id: string
+    expense_id: string
+    sgmc: {
+      id: string
+      member_name: string
+    } | null
+    sgmd: {
+      id: string
+      member_name: string
+    } | null
+  } | null
 }
 
 function toDisplayDate(dateValue: string) {
@@ -175,7 +187,7 @@ export function ExpenseHistory({
     useEffect(() => {
         async function fetchHistory() {
         const { data, error } = await supabase
-            .from('payments')
+            /*.from('payments')
             .select(`
             id,
             amount,
@@ -185,26 +197,59 @@ export function ExpenseHistory({
             payment_method,
             receipt_url,
             created_at
+            `)*/
+            .from('payments')
+            .select(`
+              id,
+              amount,
+              paid_at,
+              observations,
+              payment_method,
+              receipt_url,
+              created_at,
+              debts!inner (
+                id,
+                expense_id,
+                sgmc:spending_group_members!debts_creditor_member_id_fkey (
+                  id,
+                  member_name
+                ),
+                sgmd:spending_group_members!debts_debtor_member_id_fkey (
+                  id,
+                  member_name
+                )
+              )
             `)
-            .in('expense_signer_id', Object.keys(signerNames))
+            .eq('debts.expense_id', expenseId)
+            //.in('expense_signer_id', Object.keys(signerNames))
             .order('paid_at', { ascending: false })
 
         if (!error && data) {
-            const formatted = (data as PaymentQueryResult[])
-            .map((p) => {
+            // 1. Usamos 'unknown' como puente para que TypeScript permita el casteo
+            const rawData = data as unknown as PaymentQueryResult[]
+
+            const formatted = rawData.map((p) => {
+                // 2. A prueba de balas: Si Supabase mandó un array, tomamos la posición [0]. Si mandó objeto, lo usamos directo.
+                const debtsObj = Array.isArray(p.debts) ? p.debts[0] : p.debts
+                const sgmdObj = Array.isArray(debtsObj?.sgmd) ? debtsObj.sgmd[0] : debtsObj?.sgmd
+                const sgmcObj = Array.isArray(debtsObj?.sgmc) ? debtsObj.sgmc[0] : debtsObj?.sgmc
+
+                const debtorName = sgmdObj?.member_name || 'Desconocido'
+                const creditorName = sgmcObj?.member_name || 'Desconocido'
+
                 return {
                   id: p.id,
                   amount: p.amount,
                   paid_at: p.paid_at,
-                  expense_signer_id: p.expense_signer_id,
                   observations: p.observations,
                   payment_method: p.payment_method,
                   receipt_url: p.receipt_url,
                   created_at: p.created_at,
-                  member_name: signerNames[p.expense_signer_id] ||
-                    'Miembro'
+                  // Armamos el string dinámico
+                  member_name: `${debtorName} ➔ ${creditorName}`
                 }
             })
+            
             setPayments(formatted)
         }
         setLoading(false)
@@ -257,7 +302,7 @@ export function ExpenseHistory({
                       </span>
                     </div>
                     {payment.observations && (
-                      <p className="text-sm text-zinc-300 whitespace-pre-wrap break-words">
+                      <p className="text-sm text-zinc-300 whitespace-pre-wrap wrap-break-word">
                         {payment.observations}
                       </p>
                     )}

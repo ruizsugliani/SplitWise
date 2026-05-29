@@ -43,6 +43,8 @@ export default function ExpenseCard({
   const supabase = createClient()
   const menuRef = useRef<HTMLDivElement>(null)
 
+  console.log(expense);
+
   const handleViewReceipt = async () => {
     if (!expense.receipt_url) return
     setReceiptLoading(true)
