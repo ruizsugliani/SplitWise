@@ -45,7 +45,7 @@ export function calculateGroupDebts(
       }
 
       balancesByCurrency[debtor][curr] = (balancesByCurrency[debtor][curr] || 0) - remainingDebt;
-      balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + remainingDebt;
+      //balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + remainingDebt;
     });
   });
 
@@ -66,7 +66,7 @@ export function calculateGroupDebts(
       const remainingDebt = getRemainingSignerDebt(signer.amount_due, signer.total_paid);
 
       if (debtor !== creditor && remainingDebt > 0) {
-        directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + remainingDebt;
+        //directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + remainingDebt;
       }
     });
   });
