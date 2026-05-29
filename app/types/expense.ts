@@ -7,19 +7,27 @@ export type ExpenseSigner = {
   spending_group_members: Member | null
   amount_due: number
   total_paid: number
+  is_payer?: boolean
+}
+
+export interface ExpensePayer {
+  spending_group_member_id: string;
+  amount_paid: number;
+  member_name?: string;
 }
 
 export interface Expense {
-  id: string
-  paid_by: string
-  paid_by_member_name: string
-  created_at: string
-  value: number
-  description: string
-  split_between: number
-  member_ids?: string[]; // Lo mantenemos porque lo usa el modal de edición
+  id: string;
+  created_at: string;
+  value: number;
+  description: string;
+  split_between: number;
   currency_id: string;
+  member_ids?: string[]; 
   receipt_url?: string | null;
+  payers?: ExpensePayer[]; 
+  paid_by?: string | null;
+  paid_by_member_name?: string | null;
 }
 
 export type ExpenseWithSigners = Expense & {

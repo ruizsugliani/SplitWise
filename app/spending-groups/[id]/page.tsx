@@ -27,6 +27,41 @@ type GroupQuery = {
   expenses: ExpenseWithSigners[]
 }
 
+type MemberBalanceRow = {
+  spending_group_id: string
+  member_id: string
+  member_name: string
+  currency_id: string
+  balance: number
+}
+
+type PendingDebtRow = {
+  id: string
+  expense_id: string
+  spending_group_id: string
+  currency_id: string
+  creditor_member_id: string
+  debtor_member_id: string
+  original_amount: number
+  paid_amount: number
+  remaining: number
+  expenses: { description: string } | null
+}
+
+type GroupedDebt = {
+  creditor_member_id: string
+  debtor_member_id: string
+  currency_id: string
+  remaining: number
+  paid_amount: number
+  original_amount: number
+  items: {
+    expense_id: string
+    description: string
+    remaining: number
+  }[]
+}
+
 export default async function SpendingGroupDashboardPage({
   params,
 }: {
@@ -39,6 +74,56 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+
+  const { data: memberBalancesData } = await supabase
+  .from('member_balances')
+  .select('*')
+  .eq('spending_group_id', id)
+
+  const { data: pendingDebtsData } = await supabase
+  .from('pending_debts')
+  .select(`
+    *,
+    expenses ( description )
+  `)
+  .eq('spending_group_id', id)
+
+  const balancesByMember = (memberBalancesData as MemberBalanceRow[] || []).reduce(
+    (acc, row) => {
+      if (!acc[row.member_id]) acc[row.member_id] = []
+      acc[row.member_id].push({ currency_id: row.currency_id, balance: Number(row.balance) })
+      return acc
+    },
+    {} as Record<string, { currency_id: string; balance: number }[]>
+  )
+
+  const pendingDebts: PendingDebtRow[] = (pendingDebtsData as PendingDebtRow[]) || []
+
+  const groupedDebts = Object.values(
+    (pendingDebtsData as PendingDebtRow[] || []).reduce((acc, debt) => {
+      const key = `${debt.debtor_member_id}-${debt.creditor_member_id}-${debt.currency_id}`
+      if (!acc[key]) {
+        acc[key] = {
+          creditor_member_id: debt.creditor_member_id,
+          debtor_member_id: debt.debtor_member_id,
+          currency_id: debt.currency_id,
+          remaining: 0,
+          paid_amount: 0,
+          original_amount: 0,
+          items: [],
+        }
+      }
+      acc[key].remaining += Number(debt.remaining)
+      acc[key].paid_amount += Number(debt.paid_amount)
+      acc[key].original_amount += Number(debt.original_amount)
+      acc[key].items.push({
+        expense_id: debt.expense_id,
+        description: debt.expenses?.description ?? 'Gasto',
+        remaining: Number(debt.remaining),
+      })
+      return acc
+    }, {} as Record<string, GroupedDebt>)
+  )
     
   const { data: currenciesData, error: currenciesError } = await supabase.from('currencies').select('*');
   if (currenciesError) {
@@ -308,6 +393,7 @@ export default async function SpendingGroupDashboardPage({
       // ----------------- PESTAÑA: BALANCES -----------------
       balancesSection={
         <div className="flex flex-col gap-6">
+
           {/* 1. BALANCES INDIVIDUALES */}
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4 px-1">
@@ -315,44 +401,43 @@ export default async function SpendingGroupDashboardPage({
             </h2>
             <div className="grid gap-3">
               {members.map((m) => {
-                const userBalances = balancesByCurrency[m.id] || {};
-                const activeCurrencies = Object.entries(userBalances).filter(([, val]) => Math.abs(val) > 0.01);
-                const displayName = m.profiles?.full_name || m.member_name;
-                const initial = displayName.charAt(0).toUpperCase();
+                const displayName = m.profiles?.full_name || m.member_name
+                const initial = displayName.charAt(0).toUpperCase()
+                const balances = (balancesByMember[m.id] || []).filter(
+                  (b: { currency_id: string; balance: number }) => Math.abs(b.balance) > 0.01
+                )
 
                 return (
-                  <div key={m.id} className="flex items-center justify-between bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors p-4 rounded-2xl border border-white/5">
-                    {/* Izquierda: Avatar y Nombre */}
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors p-4 rounded-2xl border border-white/5"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-white font-bold shadow-inner">
                         {initial}
                       </div>
-                      <span className="font-medium text-white text-base">
-                        {displayName}
-                      </span>
+                      <span className="font-medium text-white text-base">{displayName}</span>
                     </div>
 
-                    {/* Derecha: Etiquetas de saldo */}
                     <div className="flex flex-col items-end gap-1.5">
-                      {activeCurrencies.length === 0 ? (
-                        <span className="text-sm text-zinc-500 bg-zinc-800/50 px-3 py-1 rounded-full">Al día</span>
+                      {balances.length === 0 ? (
+                        <span className="text-sm text-zinc-500 bg-zinc-800/50 px-3 py-1 rounded-full">
+                          Al día
+                        </span>
                       ) : (
-                        activeCurrencies.map(([currId, balance]) => {
-                          const positive = balance >= 0;
-                          return (
-                            <div 
-                              key={currId} 
-                              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${
-                                positive 
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              }`}
-                            >
-                              <span className="opacity-70">{getCurrencyCode(currId)}</span>
-                              <span>{formatCurrency(Math.abs(balance), getCurrencyCode(currId))}</span>
-                            </div>
-                          )
-                        })
+                        balances.map(({ currency_id, balance }: { currency_id: string; balance: number }) => (
+                          <div
+                            key={currency_id}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${
+                              balance >= 0
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}
+                          >
+                            <span className="opacity-70">{getCurrencyCode(currency_id)}</span>
+                            <span>{formatCurrency(Math.abs(balance), getCurrencyCode(currency_id))}</span>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -361,7 +446,7 @@ export default async function SpendingGroupDashboardPage({
             </div>
           </section>
 
-          {/* 2. TRANSFERENCIAS SUGERIDAS (DEUDAS) */}
+          {/* 2. DEUDAS PENDIENTES ENTRE MIEMBROS */}
           <section>
             <div className="flex items-center gap-2 mb-4 px-1">
               <HandCoins className="w-5 h-5 text-blue-400" />
@@ -369,57 +454,71 @@ export default async function SpendingGroupDashboardPage({
                 Cómo saldar cuentas
               </h2>
             </div>
-            
-            {settlements.length === 0 ? (
+
+            {groupedDebts.length === 0 ? (
               <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 text-center">
-                <p className="text-zinc-500 text-sm">¡Excelente! Todas las cuentas están saldadas.</p>
+                <p className="text-zinc-500 text-sm">¡Todas las cuentas están saldadas!</p>
               </div>
             ) : (
               <div className="grid gap-3">
-                {settlements.map((s, idx) => {
-                  const debtorName = memberDisplay(s.from)
-                  const creditorName = memberDisplay(s.to)
-                  const formattedAmount = formatCurrency(s.amount, getCurrencyCode(s.currency_id));
-                  const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${formattedAmount} a ${creditorName} en el grupo ${baseGroup.name} 💸`
-                  
+                {groupedDebts.map((debt) => {
+                  const debtorName = memberDisplay(debt.debtor_member_id)
+                  const creditorName = memberDisplay(debt.creditor_member_id)
+                  const currencyCode = getCurrencyCode(debt.currency_id)
+                  const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${formatCurrency(debt.remaining, currencyCode)} a ${creditorName} en el grupo ${baseGroup.name} 💸`
+
                   return (
                     <div
-                      key={`${s.from}-${s.to}-${s.currency_id}-${idx}`}
-                      className="relative overflow-hidden flex items-center justify-between bg-linear-to-r from-zinc-900/80 to-zinc-900/40 p-4 rounded-2xl border border-white/5"
+                      key={`${debt.debtor_member_id}-${debt.creditor_member_id}-${debt.currency_id}`}
+                      className="relative overflow-hidden bg-linear-to-r from-zinc-900/80 to-zinc-900/40 rounded-2xl border border-white/5"
                     >
-                      {/* Línea lateral de color para indicar que es una deuda */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500/50"></div>
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500/50" />
 
-                      <div className="flex flex-col gap-3 w-full pl-2">
-                        {/* Flujo visual: Deudor -> Acreedor */}
-                        <div className="flex items-center gap-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
-                              {debtorName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-zinc-300 font-medium truncate max-w-22.5">{debtorName}</span>
-                          </div>
-                          
-                          <ArrowRight className="w-4 h-4 text-zinc-600 shrink-0" />
-                          
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-500">
-                              {creditorName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-emerald-400 font-medium truncate max-w-22.5">{creditorName}</span>
-                          </div>
-                        </div>
+                      <div className="flex flex-col gap-3 w-full p-4 pl-5">
 
-                        {/* Monto y Acción */}
+                        {/* Cabecera: deudor → acreedor + total + acción */}
                         <div className="flex items-center justify-between">
-                          <span className="text-xl font-bold text-white tracking-tight">
-                            {formattedAmount}
-                          </span>
-                          
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
+                                {debtorName.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-zinc-300 font-medium truncate max-w-[90px]">{debtorName}</span>
+                            </div>
+
+                            <ArrowRight className="w-4 h-4 text-zinc-600 shrink-0" />
+
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-500">
+                                {creditorName.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-emerald-400 font-medium truncate max-w-[90px]">{creditorName}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg font-bold text-white tracking-tight">
+                              {formatCurrency(debt.remaining, currencyCode)}
+                            </span>
                             <CopyReminderButton message={reminderMessage} />
                           </div>
                         </div>
+
+                        {/* Detalle por gasto */}
+                        <div className="flex flex-col gap-1 border-t border-white/5 pt-3">
+                          {debt.items.map((item) => (
+                            <div
+                              key={item.expense_id}
+                              className="flex items-center justify-between text-xs text-zinc-500"
+                            >
+                              <span className="truncate max-w-[200px]">└─ {item.description}</span>
+                              <span className="text-zinc-400 font-medium">
+                                {formatCurrency(item.remaining, currencyCode)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
                       </div>
                     </div>
                   )
@@ -427,6 +526,7 @@ export default async function SpendingGroupDashboardPage({
               </div>
             )}
           </section>
+
         </div>
       }
 

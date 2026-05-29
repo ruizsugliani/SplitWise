@@ -5,74 +5,67 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Banknote, Paperclip, Loader2 } from 'lucide-react'
 
-// Definimos un tipo para la información que necesitamos de cada involucrado
-export interface SignerOption {
-  id: string;         // El ID en la tabla expense_signer
-  name: string;
-  amountDue: number;
-  totalPaid: number;
+export interface DebtOption {
+  debtId: string
+  debtorName: string
+  creditorName: string
+  expenseDescription: string
+  originalAmount: number
+  paidAmount: number
+  remaining: number
+  currencyCode: string
 }
 
 interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
-  signers: SignerOption[] // Los miembros involucrados en este gasto
+  debts: DebtOption[]
 }
 
 const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'Otro'] as const
 type PaymentMethod = typeof PAYMENT_METHODS[number]
 
-export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, debts }: PaymentModalProps) {
   const [amount, setAmount] = useState('')
   const [observations, setObservations] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Transferencia')
-  const [selectedSignerId, setSelectedSignerId] = useState<string>('')
+  const [selectedDebtId, setSelectedDebtId] = useState<string>('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
-  
+
   const supabase = createClient()
   const router = useRouter()
 
-  // Cuando se abre el modal, seleccionamos por defecto al primer miembro de la lista
-  // y limpiamos el monto.
   useEffect(() => {
-    if (isOpen && signers.length > 0) {
-      setSelectedSignerId(signers[0].id)
+    if (isOpen && debts.length > 0) {
+      setSelectedDebtId(debts[0].debtId)
       setAmount('')
       setObservations('')
       setPaymentMethod('Transferencia')
       setReceiptFile(null)
     }
-  }, [isOpen, signers])
+  }, [isOpen, debts])
 
-  // Buscamos al miembro seleccionado para calcular su deuda dinámicamente
-  const selectedSigner = signers.find(s => s.id === selectedSignerId)
-  const remainingDebt = selectedSigner ? selectedSigner.amountDue - selectedSigner.totalPaid : 0
+  const selectedDebt = debts.find(d => d.debtId === selectedDebtId)
+  const remaining = selectedDebt?.remaining ?? 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const paymentAmount = parseFloat(amount)
 
     if (isNaN(paymentAmount) || paymentAmount <= 0) return
-    
-    if (!selectedSignerId) {
-      alert("Por favor selecciona un miembro al cual asignarle el pago.")
+    if (!selectedDebtId) return
+    if (paymentAmount > remaining) {
+      alert(`El pago no puede exceder la deuda pendiente ($${remaining.toFixed(2)})`)
       return
     }
-
-    if (paymentAmount > remainingDebt) {
-      alert(`El pago no puede exceder el monto adeudado ($${remainingDebt.toFixed(2)})`)
-      return
-    }
-
-    const trimmedObservations = observations.trim()
 
     setLoading(true)
     try {
       let receiptPath: string | null = null
       if (receiptFile) {
         const fileExt = receiptFile.name.split('.').pop()
-        const filePath = `${selectedSignerId}-${Math.random()}.${fileExt}`
+        const filePath = `${selectedDebtId}-${Math.random()}.${fileExt}`
         const { error: uploadError } = await supabase.storage
           .from('payment-receipts')
           .upload(filePath, receiptFile)
@@ -83,9 +76,9 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
       const { error } = await supabase
         .from('payments')
         .insert({
-          expense_signer_id: selectedSignerId,
+          debt_id: selectedDebtId,
           amount: paymentAmount,
-          observations: trimmedObservations || null,
+          observations: observations.trim() || null,
           payment_method: paymentMethod,
           receipt_url: receiptPath,
           paid_at: new Date().toISOString()
@@ -96,8 +89,8 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
       router.refresh()
       onClose()
     } catch (error) {
-      console.error("Error al registrar el pago:", error)
-      alert("Error al procesar el pago")
+      console.error('Error al registrar el pago:', error)
+      alert('Error al procesar el pago')
     } finally {
       setLoading(false)
     }
@@ -108,56 +101,64 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      
+
       <div className="relative bg-white text-black w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <Banknote className="w-5 h-5 text-green-600" />
           Registrar pago
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* NUEVO: Selector de Miembro */}
+
+          {/* Selector de deuda: muestra deudor → acreedor */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Pagar a nombre de</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">Pago de</label>
             <select
-              value={selectedSignerId}
-              onChange={(e) => setSelectedSignerId(e.target.value)}
+              value={selectedDebtId}
+              onChange={(e) => {
+                setSelectedDebtId(e.target.value)
+                setAmount('')
+              }}
               className="w-full bg-zinc-100 border-none rounded-xl p-3 focus:ring-2 focus:ring-green-500 outline-none text-base"
             >
-              {signers.map((signer) => {
-                const isPaidOff = (signer.amountDue - signer.totalPaid) <= 0.01;
-                return (
-                  <option key={signer.id} value={signer.id} disabled={isPaidOff}>
-                    {signer.name} {isPaidOff ? '(Saldado)' : ''}
-                  </option>
-                )
-              })}
+              {debts.map((debt) => (
+                <option key={debt.debtId} value={debt.debtId}>
+                  {debt.debtorName} → {debt.creditorName}
+                </option>
+              ))}
             </select>
           </div>
 
+          {/* Deuda pendiente */}
           <div className="bg-zinc-100 p-4 rounded-xl">
             <p className="text-sm text-zinc-600">Deuda pendiente</p>
             <p className="text-2xl font-bold text-green-600">
-              ${remainingDebt > 0 ? remainingDebt.toFixed(2) : '0.00'}
+              {selectedDebt?.currencyCode} ${remaining > 0 ? remaining.toFixed(2) : '0.00'}
             </p>
+            {selectedDebt && selectedDebt.paidAmount > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">
+                Pagado: ${selectedDebt.paidAmount.toFixed(2)} de ${selectedDebt.originalAmount.toFixed(2)}
+              </p>
+            )}
           </div>
 
+          {/* Monto */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Monto a pagar ($)</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">Monto a pagar</label>
             <input
               type="number"
               step="0.01"
-              max={remainingDebt > 0 ? remainingDebt : 0} // Restringimos el input nativo
+              max={remaining > 0 ? remaining : 0}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               className="w-full bg-zinc-100 border-none rounded-xl p-4 focus:ring-2 focus:ring-green-500 outline-none text-xl"
               required
-              disabled={remainingDebt <= 0} // Deshabilitar si ya no hay deuda
+              disabled={remaining <= 0}
             />
           </div>
 
+          {/* Medio de pago */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Medio de pago</label>
             <select
@@ -171,6 +172,7 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
             </select>
           </div>
 
+          {/* Observaciones */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Observaciones</label>
             <textarea
@@ -182,6 +184,7 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
             />
           </div>
 
+          {/* Comprobante */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Comprobante (opcional)</label>
             <label
@@ -212,7 +215,8 @@ export function PaymentModal({ isOpen, onClose, signers }: PaymentModalProps) {
               Cancelar
             </button>
             <button
-              disabled={loading || !amount || remainingDebt <= 0}
+              type="submit"
+              disabled={loading || !amount || remaining <= 0}
               className="flex-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition disabled:opacity-50"
             >
               {loading ? (
