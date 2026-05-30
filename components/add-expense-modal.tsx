@@ -8,6 +8,8 @@ import { Expense } from "@/app/types/expense";
 import ToastConfirm from "./ui/toast-confirmation";
 import { Currency } from "@/app/types/currency";
 import { Member } from "@/app/types/member";
+import { currencyConfig } from "@/lib/currency-config";
+import CurrencySelector from "./currency-selector";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
@@ -188,6 +190,12 @@ export function AddExpenseModal({
   const labelStyles = "text-xs font-semibold uppercase tracking-wider block mb-2 text-zinc-400";
   const inputStyles = "w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 outline-none transition-all placeholder:text-zinc-600 [&>option]:bg-[#121212]";
 
+  const selectedCurrency = currencies.find(
+    (c) => c.id === currencyId
+  );
+
+  const currencyMeta = selectedCurrency ? currencyConfig[selectedCurrency.code as keyof typeof currencyConfig] : undefined;
+
   return (
     <>
       {!onCloseExternal && (
@@ -228,7 +236,7 @@ export function AddExpenseModal({
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
                 <label className={labelStyles}>Valor</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-500 font-bold text-xl">$</span>
+                  <span className="text-emerald-500 font-bold text-xl">{currencyMeta?.symbol ?? "$"}</span>
                   <input
                     type="number"
                     placeholder="0.00"
@@ -242,17 +250,11 @@ export function AddExpenseModal({
               {/* Currency Select */}
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3 min-w-25">
                 <label className={labelStyles}>Moneda</label>
-                <select
+                <CurrencySelector
+                  currencies={currencies}
                   value={currencyId}
-                  onChange={(e) => setCurrencyId(e.target.value)}
-                  className="w-full bg-transparent outline-none text-white font-medium cursor-pointer [&>option]:bg-[#121212] pt-1"
-                >
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCurrencyId}
+                />
               </div>
             </div>
 
@@ -323,7 +325,8 @@ export function AddExpenseModal({
                         </label>
 
                         <span className={`text-sm font-mono ${isSelected ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                          ${isSelected ? perPersonAmount.toFixed(2) : "0.00"}
+                          {currencyMeta?.symbol ?? "$"}
+                          {isSelected ? perPersonAmount.toFixed(2) : "0.00"}
                         </span>
                       </div>
                     );
