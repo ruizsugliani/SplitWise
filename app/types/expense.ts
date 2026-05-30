@@ -28,6 +28,7 @@ export interface Expense {
   payers?: ExpensePayer[]; 
   paid_by?: string | null;
   paid_by_member_name?: string | null;
+  expense_signer?: any[];
 }
 
 export type ExpenseWithSigners = Expense & {
