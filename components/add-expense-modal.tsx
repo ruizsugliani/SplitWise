@@ -175,7 +175,7 @@ export function AddExpenseModal({
       });
       
       if (isEditing) {
-        const { error } = await supabase.rpc("update_expense_with_signers", {
+        const { error } = await supabase.rpc("update_expense_v4", {
           p_expense_id: expenseToEdit.id,
           p_value: parsedAmount,
           p_description: description,
