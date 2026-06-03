@@ -10,6 +10,32 @@ export interface DebtCalculationResult {
 
 const DEBT_TOLERANCE = 0.01;
 
+function ensureBalanceBucket(
+  balancesByCurrency: Record<string, Record<string, number>>,
+  memberId: string
+) {
+  if (!memberId) return false;
+  if (!balancesByCurrency[memberId]) {
+    balancesByCurrency[memberId] = {};
+  }
+  return true;
+}
+
+function ensureDirectDebtBucket(
+  directDebts: Record<string, Record<string, Record<string, number>>>,
+  fromMemberId: string,
+  toMemberId: string
+) {
+  if (!fromMemberId || !toMemberId) return false;
+  if (!directDebts[fromMemberId]) {
+    directDebts[fromMemberId] = {};
+  }
+  if (!directDebts[fromMemberId][toMemberId]) {
+    directDebts[fromMemberId][toMemberId] = {};
+  }
+  return true;
+}
+
 export function getRemainingSignerDebt(amountDue: number, totalPaid: number) {
   const remaining = Number(amountDue || 0) - Number(totalPaid || 0);
   return remaining > DEBT_TOLERANCE ? remaining : 0;
@@ -44,6 +70,13 @@ export function calculateGroupDebts(
         return;
       }
 
+      const hasDebtorBucket = ensureBalanceBucket(balancesByCurrency, debtor);
+      const hasCreditorBucket = ensureBalanceBucket(balancesByCurrency, creditor);
+
+      if (!hasDebtorBucket || !hasCreditorBucket) {
+        return;
+      }
+
       balancesByCurrency[debtor][curr] = (balancesByCurrency[debtor][curr] || 0) - remainingDebt;
       //balancesByCurrency[creditor][curr] = (balancesByCurrency[creditor][curr] || 0) + remainingDebt;
     });
@@ -66,7 +99,10 @@ export function calculateGroupDebts(
       const remainingDebt = getRemainingSignerDebt(signer.amount_due, signer.total_paid);
 
       if (debtor !== creditor && remainingDebt > 0) {
-        //directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + remainingDebt;
+        if (!ensureDirectDebtBucket(directDebts, debtor, creditor)) {
+          return;
+        }
+        directDebts[debtor][creditor][curr] = (directDebts[debtor][creditor][curr] || 0) + remainingDebt;
       }
     });
   });

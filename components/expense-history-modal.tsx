@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { X, Calendar, User, Receipt, Trash2, Loader2, Paperclip, Pencil } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
@@ -89,11 +89,13 @@ export function ExpenseHistory({
   expenseId, 
   currencyCode, 
   signerNames,
+  groupPath,
   onClose 
 }: { 
   expenseId: string, 
   currencyCode: string, 
   signerNames: Record<string, string>,
+  groupPath: string,
   onClose: () => void 
 }) {
     const [payments, setPayments] = useState<Payment[]>([])
@@ -108,6 +110,65 @@ export function ExpenseHistory({
     const [toastMessage, setToastMessage] = useState<string | null>(null)
     const supabase = createClient()
     const router = useRouter()
+
+    const fetchHistory = useCallback(async () => {
+        setLoading(true)
+        const { data, error } = await supabase
+            .from('payments')
+            .select(`
+              id,
+              amount,
+              paid_at,
+              observations,
+              payment_method,
+              receipt_url,
+              created_at,
+              debts!inner (
+                id,
+                expense_id,
+                sgmc:spending_group_members!debts_creditor_member_id_fkey (
+                  id,
+                  member_name
+                ),
+                sgmd:spending_group_members!debts_debtor_member_id_fkey (
+                  id,
+                  member_name
+                )
+              )
+            `)
+            .eq('debts.expense_id', expenseId)
+            .order('paid_at', { ascending: false })
+
+        if (!error && data) {
+            // Usamos 'unknown' como puente para que TypeScript permita el casteo
+            const rawData = data as unknown as PaymentQueryResult[]
+
+            const formatted = rawData.map((p) => {
+                // A prueba de balas: Extraemos los objetos lidiando con arrays si Supabase los devuelve así
+                const debtsObj = Array.isArray(p.debts) ? p.debts[0] : p.debts
+                const sgmdObj = Array.isArray(debtsObj?.sgmd) ? debtsObj.sgmd[0] : debtsObj?.sgmd
+                const sgmcObj = Array.isArray(debtsObj?.sgmc) ? debtsObj.sgmc[0] : debtsObj?.sgmc
+
+                const debtorName = sgmdObj?.member_name || 'Desconocido'
+                const creditorName = sgmcObj?.member_name || 'Desconocido'
+
+                return {
+                    id: p.id,
+                    amount: p.amount,
+                    paid_at: p.paid_at,
+                    observations: p.observations,
+                    payment_method: p.payment_method,
+                    receipt_url: p.receipt_url,
+                    created_at: p.created_at,
+                    member_name: `${debtorName} ➔ ${creditorName}`
+                }
+            })
+            
+            setPayments(formatted)
+        }
+
+        setLoading(false)
+    }, [expenseId, supabase])
     
     const handleDeletePayment = async () => {
         if (!paymentToDelete) return
@@ -117,13 +178,15 @@ export function ExpenseHistory({
         setIsDeleting(paymentId)
         setDeletingId(paymentId)
 
-        const result = await removePayment(paymentId)
+        const result = await removePayment(paymentId, groupPath)
 
         if (result.success) {
             setToastMessage("Gasto eliminado correctamente")
             setPayments(prev => prev.filter(p => p.id !== paymentId))
+            await fetchHistory()
             router.refresh()
         } else {
+            alert(result.error || "No se pudo eliminar el pago")
             setToastMessage("No se pudo eliminar el pago")
         }
         setIsDeleting(null)
@@ -157,20 +220,34 @@ export function ExpenseHistory({
         const result = await updatePayment(paymentToEdit.id, {
             amount: parsedAmount,
             paidAt: paidAtIso,
-        })
+        }, groupPath)
 
         if (result.success) {
+            const updatedPayment = result.payment
+            if (!updatedPayment) {
+                alert("El pago no devolvio datos actualizados.")
+                setToastMessage("No se pudo confirmar la edicion del pago")
+                setIsSavingEdit(null)
+                return
+            }
+
             setPayments((prev) =>
                 prev.map((payment) =>
                     payment.id === paymentToEdit.id
-                        ? { ...payment, amount: parsedAmount, paid_at: paidAtIso }
+                        ? {
+                            ...payment,
+                            amount: updatedPayment.amount,
+                            paid_at: updatedPayment.paid_at,
+                          }
                         : payment
                 )
             )
+            await fetchHistory()
             setToastMessage("Pago editado correctamente")
             setPaymentToEdit(null)
             router.refresh()
         } else {
+            alert(result.error || "No se pudo editar el pago")
             setToastMessage("No se pudo editar el pago")
         }
 
@@ -185,78 +262,103 @@ export function ExpenseHistory({
     }, [toastMessage])
 
     useEffect(() => {
-        async function fetchHistory() {
-        const { data, error } = await supabase
-            /*.from('payments')
-            .select(`
-            id,
-            amount,
-            paid_at,
-            expense_signer_id,
-            observations,
-            payment_method,
-            receipt_url,
-            created_at
-            `)*/
-            .from('payments')
-            .select(`
-              id,
-              amount,
-              paid_at,
-              observations,
-              payment_method,
-              receipt_url,
-              created_at,
-              debts!inner (
-                id,
-                expense_id,
-                sgmc:spending_group_members!debts_creditor_member_id_fkey (
-                  id,
-                  member_name
-                ),
-                sgmd:spending_group_members!debts_debtor_member_id_fkey (
-                  id,
-                  member_name
+        const loadHistory = async () => {
+            await fetchHistory()
+        }
+
+        void loadHistory()
+    }, [fetchHistory])
+    
+    const handleDeletePayment = async () => {
+        if (!paymentToDelete) return
+
+        const paymentId = paymentToDelete.id
+        setPaymentToDelete(null)
+        setIsDeleting(paymentId)
+        setDeletingId(paymentId)
+
+        const result = await removePayment(paymentId, groupPath)
+
+        if (result.success) {
+            setToastMessage("Gasto eliminado correctamente")
+            setPayments(prev => prev.filter(p => p.id !== paymentId))
+            await fetchHistory()
+            router.refresh()
+        } else {
+            alert(result.error || "No se pudo eliminar el pago")
+            setToastMessage("No se pudo eliminar el pago")
+        }
+        setIsDeleting(null)
+        setDeletingId(null)
+    }
+
+    const handleStartEdit = (payment: Payment) => {
+        const effectiveDate = payment.paid_at || payment.created_at
+        setPaymentToEdit(payment)
+        setEditAmount(String(payment.amount))
+        setEditDateTime(toDateTimeLocalValue(effectiveDate))
+    }
+
+    const handleSaveEdit = async () => {
+        if (!paymentToEdit) return
+
+        const parsedAmount = Number(editAmount)
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            alert("Ingresá un monto válido.")
+            return
+        }
+
+        if (!editDateTime) {
+            alert("Ingresá una fecha y hora válidas.")
+            return
+        }
+
+        setIsSavingEdit(paymentToEdit.id)
+
+        const paidAtIso = new Date(editDateTime).toISOString()
+        const result = await updatePayment(paymentToEdit.id, {
+            amount: parsedAmount,
+            paidAt: paidAtIso,
+        }, groupPath)
+
+        if (result.success) {
+            const updatedPayment = result.payment
+            if (!updatedPayment) {
+                alert("El pago no devolvio datos actualizados.")
+                setToastMessage("No se pudo confirmar la edicion del pago")
+                setIsSavingEdit(null)
+                return
+            }
+
+            setPayments((prev) =>
+                prev.map((payment) =>
+                    payment.id === paymentToEdit.id
+                        ? {
+                            ...payment,
+                            amount: updatedPayment.amount,
+                            paid_at: updatedPayment.paid_at,
+                          }
+                        : payment
                 )
-              )
-            `)
-            .eq('debts.expense_id', expenseId)
-            //.in('expense_signer_id', Object.keys(signerNames))
-            .order('paid_at', { ascending: false })
-
-        if (!error && data) {
-            // 1. Usamos 'unknown' como puente para que TypeScript permita el casteo
-            const rawData = data as unknown as PaymentQueryResult[]
-
-            const formatted = rawData.map((p) => {
-                // 2. A prueba de balas: Si Supabase mandó un array, tomamos la posición [0]. Si mandó objeto, lo usamos directo.
-                const debtsObj = Array.isArray(p.debts) ? p.debts[0] : p.debts
-                const sgmdObj = Array.isArray(debtsObj?.sgmd) ? debtsObj.sgmd[0] : debtsObj?.sgmd
-                const sgmcObj = Array.isArray(debtsObj?.sgmc) ? debtsObj.sgmc[0] : debtsObj?.sgmc
-
-                const debtorName = sgmdObj?.member_name || 'Desconocido'
-                const creditorName = sgmcObj?.member_name || 'Desconocido'
-
-                return {
-                  id: p.id,
-                  amount: p.amount,
-                  paid_at: p.paid_at,
-                  observations: p.observations,
-                  payment_method: p.payment_method,
-                  receipt_url: p.receipt_url,
-                  created_at: p.created_at,
-                  // Armamos el string dinámico
-                  member_name: `${debtorName} ➔ ${creditorName}`
-                }
-            })
-            
-            setPayments(formatted)
-        }
-        setLoading(false)
+            )
+            await fetchHistory()
+            setToastMessage("Pago editado correctamente")
+            setPaymentToEdit(null)
+            router.refresh()
+        } else {
+            alert(result.error || "No se pudo editar el pago")
+            setToastMessage("No se pudo editar el pago")
         }
 
-        fetchHistory()
-    }, [expenseId, signerNames, supabase])
+        setIsSavingEdit(null)
+    }
+
+    useEffect(() => {
+        if (toastMessage) {
+        const timer = setTimeout(() => setToastMessage(null), 3000)
+        return () => clearTimeout(timer)
+        }
+    }, [toastMessage])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
