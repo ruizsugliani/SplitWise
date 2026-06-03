@@ -60,6 +60,8 @@ type GroupedDebt = {
     description: string
     remaining: number
   }[]
+}
+
 type RawExpensePayer = {
   spending_group_member_id?: string
   amount_paid?: number | string
@@ -243,7 +245,6 @@ export default async function SpendingGroupDashboardPage({
   const calcExpenses: ExpenseWithSigners[] = (expensesData || []).map((raw) => {
     const e = raw as Record<string, unknown>
     const signersRaw = Array.isArray(e.expense_signer) ? (e.expense_signer as unknown[]) : []
-    const payersRaw = Array.isArray(e.expense_payers) ? e.expense_payers : []
 
     // MAPEO ACTUALIZADO: Procesamos la nueva tabla expense_payers
     const payersRaw = Array.isArray(e.expense_payers) ? (e.expense_payers as RawExpensePayer[]) : [];
@@ -345,14 +346,17 @@ return {
       paid_by: normalizedPaidBy,
       paid_by_member_name: paidByName,
       payers: payersRaw.map((p: any) => ({
+        member_id: String(p.spending_group_member_id || ''),
+        amount: Number(p.amount_paid || 0),
+        
         spending_group_member_id: String(p.spending_group_member_id || ''),
         amount_paid: Number(p.amount_paid || 0)
-      })),
+      } as any)), // Forzamos a TS a aceptar este objeto enriquecido
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
       currency_id: String(e.currency_id || defaultCurrencyId),
-    }
+    } as ExpenseWithSigners
   })
 
   const expensesForClient = calcExpenses.map((e) => ({
