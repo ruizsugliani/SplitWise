@@ -129,9 +129,28 @@ export default function ExpenseCard({
     setIsDeleting(null)
   }
 
-  const isFullyPaid = expense.expense_signer.every(
-    (s) => s.total_paid >= s.amount_due - 0.01
-  )
+// ==========================================
+  // LÓGICA CORREGIDA PARA DETERMINAR SI ESTÁ PAGADO
+  // ==========================================
+  const isFullyPaid = expense.expense_signer.every((s) => {
+    // Tomamos el ID directo de la columna real
+    const memberId = s.spending_group_member_id;
+    
+    // 1. Buscamos cuánto abonó inicialmente esta persona al crear el gasto
+    const payer = expense.payers?.find(
+      (p) => p.spending_group_member_id === memberId
+    );
+    
+    // Usamos amount_paid que es la propiedad estricta de ExpensePayer
+    const paidUpfront = payer ? Number(payer.amount_paid || 0) : 0;
+    
+    // 2. Su deuda neta real es lo que consumió menos lo que ya puso upfront
+    const realDebt = Math.max(0, Number(s.amount_due || 0) - paidUpfront);
+    
+    // 3. Está saldado si su deuda neta es 0, o si sus pagos posteriores (total_paid) cubren la deuda real
+    return Number(s.total_paid || 0) >= realDebt - 0.01;
+  });
+
 
   const signerNames = Object.fromEntries(
     expense.expense_signer.map((es) => [

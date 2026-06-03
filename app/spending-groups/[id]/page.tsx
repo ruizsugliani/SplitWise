@@ -296,8 +296,8 @@ export default async function SpendingGroupDashboardPage({
       paid_by: firstPayerId,
       paid_by_member_name: paidByName,
       payers: payersRaw.map((p: any) => ({
-        member_id: String(p.spending_group_member_id || ''),
-        amount: Number(p.amount_paid || 0)
+        spending_group_member_id: String(p.spending_group_member_id || ''),
+        amount_paid: Number(p.amount_paid || 0)
       })),
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
