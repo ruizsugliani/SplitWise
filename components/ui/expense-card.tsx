@@ -11,8 +11,7 @@ import ToastConfirm from "./toast-confirmation";
 import { AddExpenseModal } from "../add-expense-modal";
 import { ExpenseHistory } from "../expense-history-modal";
 import { formatCurrency } from "@/app/types/currency";
-import { PaymentModal } from "../payment-modal";
-
+import { PaymentModal, DebtOption } from "../payment-modal";
 
 const formatDate = (dateString: string) => {
   return new Intl.DateTimeFormat("es-ES", {
@@ -22,7 +21,6 @@ const formatDate = (dateString: string) => {
   }).format(new Date(dateString));
 };
 
-
 export default function ExpenseCard({ 
   expense, 
   groupId, 
@@ -31,16 +29,19 @@ export default function ExpenseCard({
 }: ExpenseProps) {
   const [isLookingAtExpenseHistory, setIsLookingAtExpenseHistory] = useState(false)
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [debtOptions, setDebtOptions] = useState<DebtOption[]>([])
+  const [loadingDebts, setLoadingDebts] = useState(false)
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
-  const expenseCurrency = currencies.find(c => c.id === expense.currency_id);
-  const currencyCode = expenseCurrency?.code || 'ARS';
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const expenseCurrency = currencies.find(c => c.id === expense.currency_id)
+  const currencyCode = expenseCurrency?.code || 'ARS'
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [receiptLoading, setReceiptLoading] = useState(false)
   const supabase = createClient()
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const handleViewReceipt = async () => {
     if (!expense.receipt_url) return
@@ -49,17 +50,16 @@ export default function ExpenseCard({
     setReceiptLoading(false)
     if (!error && data) window.open(data.signedUrl, '_blank')
   }
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
+        setIsMenuOpen(false)
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (toastMessage) {
@@ -68,15 +68,58 @@ export default function ExpenseCard({
     }
   }, [toastMessage])
 
+  // Carga las deudas pendientes del gasto al abrir el modal de pago
+  const handleOpenPayment = async () => {
+    setLoadingDebts(true)
+    setIsMenuOpen(false)
+
+    const { data, error } = await supabase
+      .from('pending_debts')
+      .select(`
+        id,
+        creditor_member_id,
+        debtor_member_id,
+        original_amount,
+        paid_amount,
+        remaining
+      `)
+      .eq('expense_id', expense.id)
+
+    if (error) {
+      console.error('Error al cargar deudas:', error)
+      setLoadingDebts(false)
+      return
+    }
+
+    const membersById = new Map(members.map(m => [m.id, m]))
+
+    const options: DebtOption[] = (data || []).map((debt) => {
+      const creditor = membersById.get(debt.creditor_member_id)
+      const debtor = membersById.get(debt.debtor_member_id)
+
+      return {
+        debtId: debt.id,
+        debtorName: debtor?.profiles?.full_name || debtor?.member_name || 'Miembro',
+        creditorName: creditor?.profiles?.full_name || creditor?.member_name || 'Miembro',
+        expenseDescription: expense.description,
+        originalAmount: Number(debt.original_amount),
+        paidAmount: Number(debt.paid_amount),
+        remaining: Number(debt.remaining),
+        currencyCode,
+      }
+    })
+
+    setDebtOptions(options)
+    setLoadingDebts(false)
+    setIsPaymentOpen(true)
+  }
+
   const confirmDelete = async () => {
     if (!expenseToDelete) return
-    
     const id = expenseToDelete.id
     setExpenseToDelete(null)
     setIsDeleting(id)
-    
     const result = await removeExpense(id)
-    
     if (result.success) {
       setToastMessage("Gasto eliminado correctamente")
       router.refresh()
@@ -86,25 +129,41 @@ export default function ExpenseCard({
     setIsDeleting(null)
   }
 
-  const isFullyPaid = expense.expense_signer.every(
-    (s) => s.total_paid >= s.amount_due - 0.01 
-  );
+// ==========================================
+  // LÓGICA CORREGIDA PARA DETERMINAR SI ESTÁ PAGADO
+  // ==========================================
+  const isFullyPaid = expense.expense_signer.every((s) => {
+    // Tomamos el ID directo de la columna real
+    const memberId = s.spending_group_member_id;
+    
+    // 1. Buscamos cuánto abonó inicialmente esta persona al crear el gasto
+    const payer = expense.payers?.find(
+      (p) => p.spending_group_member_id === memberId
+    );
+    
+    // Usamos amount_paid que es la propiedad estricta de ExpensePayer
+    const paidUpfront = payer ? Number(payer.amount_paid || 0) : 0;
+    
+    // 2. Su deuda neta real es lo que consumió menos lo que ya puso upfront
+    const realDebt = Math.max(0, Number(s.amount_due || 0) - paidUpfront);
+    
+    // 3. Está saldado si su deuda neta es 0, o si sus pagos posteriores (total_paid) cubren la deuda real
+    return Number(s.total_paid || 0) >= realDebt - 0.01;
+  });
 
-  const signersOptions = expense.expense_signer.map(es => ({
-    id: es.id,
-    name: es.spending_group_members?.member_name || es.spending_group_members?.profiles?.full_name || 'Miembro',
-    amountDue: es.amount_due,
-    totalPaid: es.total_paid
-  }))
+
   const signerNames = Object.fromEntries(
-    signersOptions.map((signer) => [signer.id, signer.name])
+    expense.expense_signer.map((es) => [
+      es.id,
+      es.spending_group_members?.member_name || es.spending_group_members?.profiles?.full_name || 'Miembro'
+    ])
   )
 
   return (
     <div className={`bg-zinc-900/60 rounded-xl p-4 shadow-sm border ${isFullyPaid ? 'border-emerald-500/30' : 'border-amber-500/30'}`}>
       <div className="flex justify-between items-start">
         <div>
-        <h3 className="font-medium flex items-center gap-2">
+          <h3 className="font-medium flex items-center gap-2">
             {expense.description}
             {isFullyPaid ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -113,7 +172,8 @@ export default function ExpenseCard({
             )}
           </h3>
           <p className="text-sm text-zinc-400">
-            Pagado por {expense.paid_by_member_name}{expense.receipt_url && (
+            Pagado por {expense.paid_by_member_name}
+            {expense.receipt_url && (
               <button onClick={handleViewReceipt} disabled={receiptLoading} title="Ver comprobante" className="ml-1 align-middle text-zinc-500 hover:text-white transition disabled:opacity-50">
                 {receiptLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : <Paperclip className="w-3.5 h-3.5 inline" />}
               </button>
@@ -128,7 +188,6 @@ export default function ExpenseCard({
             </p>
           </div>
 
-          {/* Menú de acciones (Tres puntitos) */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -137,39 +196,42 @@ export default function ExpenseCard({
               <MoreVertical className="w-5 h-5" />
             </button>
 
-            {/* Dropdown Flotante */}
             {isMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-[#1a1a1a] border border-white/10 shadow-2xl overflow-hidden z-10 py-1 animate-in fade-in zoom-in-95 duration-100">
                 <button
-                  onClick={() => setIsLookingAtExpenseHistory(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
+                  onClick={() => { setIsLookingAtExpenseHistory(true); setIsMenuOpen(false) }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
                 >
-                  <Receipt className="w-4 h-4"/>
+                  <Receipt className="w-4 h-4" />
                   Historial
                 </button>
 
                 {!isFullyPaid && (
-                <button
-                  onClick={() => setIsPaymentOpen(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Registrar pago
-                </button>
-              )}
+                  <button
+                    onClick={handleOpenPayment}
+                    disabled={loadingDebts}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                  >
+                    {loadingDebts
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Wallet className="w-4 h-4" />
+                    }
+                    Registrar pago
+                  </button>
+                )}
 
                 <button
-                  onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
+                  onClick={() => { setIsEditing(true); setIsMenuOpen(false) }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-blue-400 transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />
                   Editar gasto
                 </button>
-                
+
                 <div className="h-px bg-white/5 my-1 mx-2" />
-                
+
                 <button
-                  onClick={() => { setExpenseToDelete(expense); setIsMenuOpen(false); }}
+                  onClick={() => { setExpenseToDelete(expense); setIsMenuOpen(false) }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -188,15 +250,14 @@ export default function ExpenseCard({
         <span>{formatDate(expense.created_at)}</span>
       </div>
 
-
-      <PaymentModal 
+      <PaymentModal
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
-        signers={signersOptions}
+        debts={debtOptions}
       />
 
       {isLookingAtExpenseHistory && (
-        <ExpenseHistory 
+        <ExpenseHistory
           expenseId={expense.id}
           currencyCode={currencyCode}
           signerNames={signerNames}
@@ -206,7 +267,7 @@ export default function ExpenseCard({
       )}
 
       {expenseToDelete && (
-        <ConfirmModal 
+        <ConfirmModal
           isOpen={expenseToDelete !== null}
           title="¿Estás seguro?"
           description={
@@ -224,8 +285,8 @@ export default function ExpenseCard({
       )}
 
       {isEditing && (
-        <AddExpenseModal 
-          groupId={groupId} // Ajustado para tomar el ID del gasto
+        <AddExpenseModal
+          groupId={groupId}
           members={members}
           expenseToEdit={{
             ...expense,
@@ -239,5 +300,5 @@ export default function ExpenseCard({
 
       {toastMessage && <ToastConfirm toastMessage={toastMessage} />}
     </div>
-  );
+  )
 }

@@ -27,6 +27,41 @@ type GroupQuery = {
   expenses: ExpenseWithSigners[]
 }
 
+type MemberBalanceRow = {
+  spending_group_id: string
+  member_id: string
+  member_name: string
+  currency_id: string
+  balance: number
+}
+
+type PendingDebtRow = {
+  id: string
+  expense_id: string
+  spending_group_id: string
+  currency_id: string
+  creditor_member_id: string
+  debtor_member_id: string
+  original_amount: number
+  paid_amount: number
+  remaining: number
+  expenses: { description: string } | null
+}
+
+type GroupedDebt = {
+  creditor_member_id: string
+  debtor_member_id: string
+  currency_id: string
+  remaining: number
+  paid_amount: number
+  original_amount: number
+  items: {
+    expense_id: string
+    description: string
+    remaining: number
+  }[]
+}
+
 type RawExpensePayer = {
   spending_group_member_id?: string
   amount_paid?: number | string
@@ -54,31 +89,29 @@ export default async function SpendingGroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
-    
-  const { data: currenciesData, error: currenciesError } = await supabase.from('currencies').select('*');
-  if (currenciesError) {
-    console.error('Error fetching currencies', currenciesError);
-  }
-  const currencies = currenciesData || [];
-  const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
+
+  const { data: currenciesData, error: currenciesError } = await supabase
+    .from('currencies')
+    .select('*')
+  if (currenciesError) console.error('Error fetching currencies', currenciesError)
+  const currencies = currenciesData || []
+  const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || ''
 
   const { data: group, error } = await supabase
     .from('spending_groups')
-    .select(
-      `
+    .select(`
+      id,
+      name,
+      icon,
+      created_by,
+      closed_at,
+      members:spending_group_members (
         id,
-        name,
-        icon,
-        created_by,
-        closed_at,
-        members:spending_group_members (
-          id,
-          member_name,
-          profile_id,
-          profiles ( id, full_name, avatar_url, email )
-        )
-      `
-    )
+        member_name,
+        profile_id,
+        profiles ( id, full_name, avatar_url, email )
+      )
+    `)
     .eq('id', id)
     .single()
 
@@ -94,9 +127,7 @@ export default async function SpendingGroupDashboardPage({
   }
 
   const baseGroup = group as unknown as GroupQuery
-  if (baseGroup.closed_at) {
-    redirect('/spending-groups')
-  }
+  if (baseGroup.closed_at) redirect('/spending-groups')
 
   const members = baseGroup.members || []
   const membersById = new Map(members.map((m) => [m.id, m]))
@@ -104,6 +135,54 @@ export default async function SpendingGroupDashboardPage({
     members
       .filter((member) => member.profile_id)
       .map((member) => [member.profile_id as string, member])
+  )
+
+  const { data: memberBalancesData } = await supabase
+    .from('member_balances')
+    .select('*')
+    .eq('spending_group_id', id)
+
+  const { data: pendingDebtsData } = await supabase
+    .from('pending_debts')
+    .select(`
+      *,
+      expenses ( description )
+    `)
+    .eq('spending_group_id', id)
+
+  const balancesByMember = (memberBalancesData as MemberBalanceRow[] || []).reduce(
+    (acc, row) => {
+      if (!acc[row.member_id]) acc[row.member_id] = []
+      acc[row.member_id].push({ currency_id: row.currency_id, balance: Number(row.balance) })
+      return acc
+    },
+    {} as Record<string, { currency_id: string; balance: number }[]>
+  )
+
+  const groupedDebts = Object.values(
+    (pendingDebtsData as PendingDebtRow[] || []).reduce((acc, debt) => {
+      const key = `${debt.debtor_member_id}-${debt.creditor_member_id}-${debt.currency_id}`
+      if (!acc[key]) {
+        acc[key] = {
+          creditor_member_id: debt.creditor_member_id,
+          debtor_member_id: debt.debtor_member_id,
+          currency_id: debt.currency_id,
+          remaining: 0,
+          paid_amount: 0,
+          original_amount: 0,
+          items: [],
+        }
+      }
+      acc[key].remaining += Number(debt.remaining)
+      acc[key].paid_amount += Number(debt.paid_amount)
+      acc[key].original_amount += Number(debt.original_amount)
+      acc[key].items.push({
+        expense_id: debt.expense_id,
+        description: debt.expenses?.description ?? 'Gasto',
+        remaining: Number(debt.remaining),
+      })
+      return acc
+    }, {} as Record<string, GroupedDebt>)
   )
 
   const { data: expensesData, error: expensesError } = await supabase
@@ -127,7 +206,6 @@ export default async function SpendingGroupDashboardPage({
         id,
         spending_group_member_id,
         amount_due,
-        payments ( amount ),
         spending_group_members (
           id,
           member_name,
@@ -139,6 +217,30 @@ export default async function SpendingGroupDashboardPage({
     .eq('spending_group_id', id)
 
   if (expensesError) console.error('Error fetching expenses', expensesError)
+
+  const { data: allDebtsData } = await supabase
+  .from('debts')
+  .select(`
+    id,
+    expense_id,
+    debtor_member_id,
+    original_amount,
+    payments ( amount )
+  `)
+  .in('expense_id', (expensesData || []).map((e: any) => e.id))
+
+  // Mapa: `${expense_id}-${debtor_member_id}` -> paid_amount
+  const paidByExpenseAndMember = (allDebtsData || []).reduce(
+  (acc, debt) => {
+    const key = `${debt.expense_id}-${debt.debtor_member_id}`
+    const paid = (debt.payments || []).reduce(
+      (sum: number, p: any) => sum + Number(p.amount), 0
+    )
+    acc[key] = (acc[key] ?? 0) + paid
+    return acc
+  },
+  {} as Record<string, number>
+)
 
   const calcExpenses: ExpenseWithSigners[] = (expensesData || []).map((raw) => {
     const e = raw as Record<string, unknown>
@@ -187,7 +289,9 @@ export default async function SpendingGroupDashboardPage({
 
     const normalizeMember = (m: unknown): Member | null => {
       if (!m) return null
-      const candidate = Array.isArray(m) ? (m[0] as Record<string, unknown> | undefined) : (m as Record<string, unknown>)
+      const candidate = Array.isArray(m)
+        ? (m[0] as Record<string, unknown> | undefined)
+        : (m as Record<string, unknown>)
       if (!candidate) return null
       const profilesRaw = candidate.profiles
       const profileObj = Array.isArray(profilesRaw)
@@ -211,44 +315,48 @@ export default async function SpendingGroupDashboardPage({
       }
     }
 
+    const expenseId = String(e.id ?? '')
+
     const expenseSigner: ExpenseSigner[] = signersRaw.map((esRaw) => {
-      const es = esRaw as { 
-        id?: string; 
-        spending_group_member_id?: string; 
-        spending_group_members?: unknown; 
-        amount_due?: number; 
-        payments?: { amount?: number | string }[] 
-      };
-      
-      const payments = Array.isArray(es.payments) ? es.payments : [];
-      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const es = esRaw as {
+        id?: string
+        spending_group_member_id?: string
+        spending_group_members?: unknown
+        amount_due?: number
+      }
+
+      const memberId = String(es.spending_group_member_id ?? '')
+      const totalPaid = paidByExpenseAndMember[`${expenseId}-${memberId}`] ?? 0
 
       return {
         id: String(es.id ?? ''),
-        spending_group_member_id: String(es.spending_group_member_id ?? ''),
+        spending_group_member_id: memberId,
         spending_group_members: normalizeMember(es.spending_group_members),
         amount_due: Number(es.amount_due ?? 0),
         total_paid: totalPaid,
       }
     })
 
-    const expensePayers: ExpensePayer[] = payersRaw.map((payer) => ({
-      member_id: String(payer.spending_group_member_id || ''),
-      amount: Number(payer.amount_paid || 0),
-    }))
+    
 
-    return {
-      id: String(e.id ?? ''),
+return {
+      id: expenseId,
       description: (e.description as string | undefined) ?? '',
       created_at: (e.created_at as string | undefined) ?? '',
       paid_by: normalizedPaidBy,
       paid_by_member_name: paidByName,
-      payers: expensePayers,
+      payers: payersRaw.map((p: any) => ({
+        member_id: String(p.spending_group_member_id || ''),
+        amount: Number(p.amount_paid || 0),
+        
+        spending_group_member_id: String(p.spending_group_member_id || ''),
+        amount_paid: Number(p.amount_paid || 0)
+      } as any)), // Forzamos a TS a aceptar este objeto enriquecido
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,
       currency_id: String(e.currency_id || defaultCurrencyId),
-    }
+    } as ExpenseWithSigners
   })
 
   const expensesForClient = calcExpenses.map((e) => ({
@@ -256,32 +364,28 @@ export default async function SpendingGroupDashboardPage({
     currentUserSigner: e.expense_signer.find(
       (s) => s.spending_group_members?.profile_id === user.id
     ) || null
-  })) as ExpenseWithSigners[];
+  })) as ExpenseWithSigners[]
 
-  const { 
-    totalsByCurrency, 
-    balancesByCurrency, 
-    settlements 
-  } = calculateGroupDebts(calcExpenses, members, currencies);
+  const {
+    totalsByCurrency,
+    balancesByCurrency,
+    settlements
+  } = calculateGroupDebts(calcExpenses, members, currencies)
 
-  const getCurrencyCode = (id: string) => currencies.find(c => c.id === id)?.code || 'ARS';
+  const getCurrencyCode = (id: string) => currencies.find(c => c.id === id)?.code || 'ARS'
 
   const memberDisplay = (memberId: string) => {
     const member = membersById.get(memberId)
     return member?.profiles?.full_name || member?.member_name || 'Miembro'
   }
-  
-  const isCreator = user.id === baseGroup.created_by;
-  const currentMember = getCurrentMember(members, user.id);
-  const hasPendingDebt = currentMember ? memberHasPendingDebt(calcExpenses, currentMember.id) : false;
-  const canLeaveGroup = !isCreator && !hasPendingDebt && !!currentMember;
 
-  // ==========================================
-  // RENDERIZADO DEL NUEVO LAYOUT POR PESTAÑAS
-  // ==========================================
+  const isCreator = user.id === baseGroup.created_by
+  const currentMember = getCurrentMember(members, user.id)
+  const hasPendingDebt = currentMember ? memberHasPendingDebt(calcExpenses, currentMember.id) : false
+  const canLeaveGroup = !isCreator && !hasPendingDebt && !!currentMember
+
   return (
-    <GroupDashboardTabs 
-      // ----------------- HEADER -----------------
+    <GroupDashboardTabs
       header={
         <header className="max-w-2xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex justify-start">
@@ -298,17 +402,16 @@ export default async function SpendingGroupDashboardPage({
           </div>
           <div className="flex justify-end">
             {isCreator && (
-              <EditGroupModal 
-                groupId={id} 
-                initialName={group.name} 
-                initialIcon={group.icon} 
+              <EditGroupModal
+                groupId={id}
+                initialName={group.name}
+                initialIcon={group.icon}
               />
             )}
           </div>
         </header>
       }
 
-      // ----------------- PESTAÑA: GASTOS -----------------
       gastosSection={
         <>
           <div className="w-full mb-2">
@@ -337,64 +440,62 @@ export default async function SpendingGroupDashboardPage({
               <Wallet className="w-5 h-5 text-green-500" />
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Gastos recientes</h2>
             </div>
-            <ExpensesClient 
-              groupId={id} 
-              members={members} 
-              expenses={expensesForClient} 
+            <ExpensesClient
+              groupId={id}
+              members={members}
+              expenses={expensesForClient}
               currencies={currencies}
             />
           </section>
         </>
       }
 
-      // ----------------- PESTAÑA: BALANCES -----------------
       balancesSection={
         <div className="flex flex-col gap-6">
-          {/* 1. BALANCES INDIVIDUALES */}
+
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4 px-1">
               Estado de cuenta
             </h2>
             <div className="grid gap-3">
               {members.map((m) => {
-                const userBalances = balancesByCurrency[m.id] || {};
-                const activeCurrencies = Object.entries(userBalances).filter(([, val]) => Math.abs(val) > 0.01);
-                const displayName = m.profiles?.full_name || m.member_name;
-                const initial = displayName.charAt(0).toUpperCase();
+                const displayName = m.profiles?.full_name || m.member_name
+                const initial = displayName.charAt(0).toUpperCase()
+                const balances = (balancesByMember[m.id] || []).filter(
+                  (b: { currency_id: string; balance: number }) => Math.abs(b.balance) > 0.01
+                )
 
                 return (
-                  <div key={m.id} className="flex items-center justify-between bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors p-4 rounded-2xl border border-white/5">
-                    {/* Izquierda: Avatar y Nombre */}
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors p-4 rounded-2xl border border-white/5"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-white font-bold shadow-inner">
                         {initial}
                       </div>
-                      <span className="font-medium text-white text-base">
-                        {displayName}
-                      </span>
+                      <span className="font-medium text-white text-base">{displayName}</span>
                     </div>
 
-                    {/* Derecha: Etiquetas de saldo */}
                     <div className="flex flex-col items-end gap-1.5">
-                      {activeCurrencies.length === 0 ? (
-                        <span className="text-sm text-zinc-500 bg-zinc-800/50 px-3 py-1 rounded-full">Al día</span>
+                      {balances.length === 0 ? (
+                        <span className="text-sm text-zinc-500 bg-zinc-800/50 px-3 py-1 rounded-full">
+                          Al día
+                        </span>
                       ) : (
-                        activeCurrencies.map(([currId, balance]) => {
-                          const positive = balance >= 0;
-                          return (
-                            <div 
-                              key={currId} 
-                              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${
-                                positive 
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              }`}
-                            >
-                              <span className="opacity-70">{getCurrencyCode(currId)}</span>
-                              <span>{formatCurrency(Math.abs(balance), getCurrencyCode(currId))}</span>
-                            </div>
-                          )
-                        })
+                        balances.map(({ currency_id, balance }: { currency_id: string; balance: number }) => (
+                          <div
+                            key={currency_id}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${
+                              balance >= 0
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}
+                          >
+                            <span className="opacity-70">{getCurrencyCode(currency_id)}</span>
+                            <span>{formatCurrency(Math.abs(balance), getCurrencyCode(currency_id))}</span>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -403,7 +504,6 @@ export default async function SpendingGroupDashboardPage({
             </div>
           </section>
 
-          {/* 2. TRANSFERENCIAS SUGERIDAS (DEUDAS) */}
           <section>
             <div className="flex items-center gap-2 mb-4 px-1">
               <HandCoins className="w-5 h-5 text-blue-400" />
@@ -411,56 +511,66 @@ export default async function SpendingGroupDashboardPage({
                 Cómo saldar cuentas
               </h2>
             </div>
-            
-            {settlements.length === 0 ? (
+
+            {groupedDebts.length === 0 ? (
               <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 text-center">
-                <p className="text-zinc-500 text-sm">¡Excelente! Todas las cuentas están saldadas.</p>
+                <p className="text-zinc-500 text-sm">¡Todas las cuentas están saldadas!</p>
               </div>
             ) : (
               <div className="grid gap-3">
-                {settlements.map((s, idx) => {
-                  const debtorName = memberDisplay(s.from)
-                  const creditorName = memberDisplay(s.to)
-                  const formattedAmount = formatCurrency(s.amount, getCurrencyCode(s.currency_id));
-                  const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${formattedAmount} a ${creditorName} en el grupo ${baseGroup.name} 💸`
-                  
+                {groupedDebts.map((debt) => {
+                  const debtorName = memberDisplay(debt.debtor_member_id)
+                  const creditorName = memberDisplay(debt.creditor_member_id)
+                  const currencyCode = getCurrencyCode(debt.currency_id)
+                  const reminderMessage = `Hola ${debtorName}, te recuerdo que le debés ${formatCurrency(debt.remaining, currencyCode)} a ${creditorName} en el grupo ${baseGroup.name} 💸`
+
                   return (
                     <div
-                      key={`${s.from}-${s.to}-${s.currency_id}-${idx}`}
-                      className="relative overflow-hidden flex items-center justify-between bg-linear-to-r from-zinc-900/80 to-zinc-900/40 p-4 rounded-2xl border border-white/5"
+                      key={`${debt.debtor_member_id}-${debt.creditor_member_id}-${debt.currency_id}`}
+                      className="relative overflow-hidden bg-linear-to-r from-zinc-900/80 to-zinc-900/40 rounded-2xl border border-white/5"
                     >
-                      {/* Línea lateral de color para indicar que es una deuda */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500/50"></div>
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500/50" />
 
-                      <div className="flex flex-col gap-3 w-full pl-2">
-                        {/* Flujo visual: Deudor -> Acreedor */}
-                        <div className="flex items-center gap-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
-                              {debtorName.charAt(0).toUpperCase()}
+                      <div className="flex flex-col gap-3 w-full p-4 pl-5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
+                                {debtorName.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-zinc-300 font-medium truncate max-w-22.5">{debtorName}</span>
                             </div>
-                            <span className="text-zinc-300 font-medium truncate max-w-22.5">{debtorName}</span>
+
+                            <ArrowRight className="w-4 h-4 text-zinc-600 shrink-0" />
+
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-500">
+                                {creditorName.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-emerald-400 font-medium truncate max-w-22.5">{creditorName}</span>
+                            </div>
                           </div>
-                          
-                          <ArrowRight className="w-4 h-4 text-zinc-600 shrink-0" />
-                          
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-500">
-                              {creditorName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-emerald-400 font-medium truncate max-w-22.5">{creditorName}</span>
+
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg font-bold text-white tracking-tight">
+                              {formatCurrency(debt.remaining, currencyCode)}
+                            </span>
+                            <CopyReminderButton message={reminderMessage} />
                           </div>
                         </div>
 
-                        {/* Monto y Acción */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xl font-bold text-white tracking-tight">
-                            {formattedAmount}
-                          </span>
-                          
-                          <div className="flex items-center gap-2">
-                            <CopyReminderButton message={reminderMessage} />
-                          </div>
+                        <div className="flex flex-col gap-1 border-t border-white/5 pt-3">
+                          {debt.items.map((item) => (
+                            <div
+                              key={item.expense_id}
+                              className="flex items-center justify-between text-xs text-zinc-500"
+                            >
+                              <span className="truncate max-w-50">└─ {item.description}</span>
+                              <span className="text-zinc-400 font-medium">
+                                {formatCurrency(item.remaining, currencyCode)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -469,14 +579,13 @@ export default async function SpendingGroupDashboardPage({
               </div>
             )}
           </section>
+
         </div>
       }
 
-      // ----------------- PESTAÑA: AJUSTES -----------------
       ajustesSection={
         <div className="flex flex-col gap-6">
-          
-          {/* TARJETA 1: GESTIÓN DE MIEMBROS */}
+
           <section>
             <div className="flex items-center gap-2 mb-3 px-1">
               <Users className="w-5 h-5 text-zinc-400" />
@@ -484,8 +593,6 @@ export default async function SpendingGroupDashboardPage({
                 Gestión de Miembros
               </h2>
             </div>
-            
-            {/* Usamos flex-col para móvil y grid de 2 columnas para pantallas más grandes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <AddMemberModal groupId={id} />
               <MembersListModal
@@ -497,17 +604,15 @@ export default async function SpendingGroupDashboardPage({
             </div>
           </section>
 
-          {/* TARJETA 2: ZONA DE PELIGRO */}
           <section>
-            {/* Contenedor con fondo rojo muy sutil para agrupar acciones destructivas */}
             <div className="flex flex-col gap-3 bg-red-500/5 border border-red-500/10 rounded-3xl p-4">
-              <CloseGroupButton 
-                groupId={id} 
-                isClosed={false} 
-                isCreator={isCreator} 
-                hasPendingDebts={settlements.length > 0}
+              <CloseGroupButton
+                groupId={id}
+                isClosed={false}
+                isCreator={isCreator}
+                hasPendingDebts={groupedDebts.length > 0}
               />
-              
+
               {!isCreator && (
                 <LeaveGroupButton
                   groupId={id}
@@ -521,7 +626,7 @@ export default async function SpendingGroupDashboardPage({
               )}
             </div>
           </section>
-          
+
         </div>
       }
     />

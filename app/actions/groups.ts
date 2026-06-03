@@ -9,15 +9,11 @@ type CloseGroupResult = {
   error?: string
 }
 
-type ExpenseSignerRow = {
-  spending_group_member_id: string
-  amount_due: number
+// Actualizamos los tipos para reflejar la nueva consulta sobre debts
+type DebtRow = {
+  id: string
+  amount: number
   payments: { amount: number | string | null }[] | null
-}
-
-type ExpenseRow = {
-  paid_by: string
-  expense_signer: ExpenseSignerRow[] | null
 }
 
 export async function closeGroup(groupId: string): Promise<CloseGroupResult> {
@@ -50,38 +46,37 @@ export async function closeGroup(groupId: string): Promise<CloseGroupResult> {
       return { success: false, error: 'El grupo ya está cerrado.' }
     }
 
-    const { data: expensesData, error: expensesError } = await supabase
-      .from('expenses')
-      .select(
-        `
-          paid_by,
-          expense_signer (
-            spending_group_member_id,
-            amount_due,
-            payments ( amount )
-          )
-        `
-      )
-      .eq('spending_group_id', groupId)
+    // Buscamos directamente las deudas que pertenecen a los gastos de este grupo
+    // y traemos los montos de todos los pagos asociados a cada deuda.
+    const { data: debtsData, error: debtsError } = await supabase
+      .from('debts')
+      .select(`
+        id,
+        amount:original_amount,
+        expenses!inner (
+          spending_group_id
+        ),
+        payments (
+          amount
+        )
+      `)
+      .eq('expenses.spending_group_id', groupId)
 
-    if (expensesError) {
-      return { success: false, error: 'No se pudieron obtener los gastos del grupo.' }
+    console.error("ERROR AL OBTENER DEUDAS:", debtsError)
+    
+    if (debtsError) {
+      return { success: false, error: 'No se pudieron obtener las deudas del grupo.' }
     }
 
-    const hasPendingDebt = ((expensesData || []) as ExpenseRow[]).some((expense) =>
-      (expense.expense_signer || []).some((signer) => {
-        if (signer.spending_group_member_id === expense.paid_by) {
-          return false
-        }
+    // Validamos si alguna deuda sigue activa (monto pagado < monto adeudado)
+    const hasPendingDebt = ((debtsData || []) as DebtRow[]).some((debt) => {
+      const totalPaid = (debt.payments || []).reduce(
+        (sum, payment) => sum + (Number(payment.amount) || 0),
+        0
+      )
 
-        const totalPaid = (signer.payments || []).reduce(
-          (sum, payment) => sum + (Number(payment.amount) || 0),
-          0
-        )
-
-        return getRemainingSignerDebt(signer.amount_due, totalPaid) > 0
-      })
-    )
+      return getRemainingSignerDebt(debt.amount, totalPaid) > 0
+    })
 
     if (hasPendingDebt) {
       return {
