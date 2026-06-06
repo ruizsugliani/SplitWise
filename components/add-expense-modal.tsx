@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Receipt, X, Paperclip, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import { Expense } from "@/app/types/expense";
 import ToastConfirm from "./ui/toast-confirmation";
 import { Currency } from "@/app/types/currency";
 import { Member } from "@/app/types/member";
+import { recordInitialExpenseHistory } from "@/app/actions/expense-history";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
@@ -70,7 +71,7 @@ export function AddExpenseModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   // Inicialización y persistencia de edición
   useEffect(() => {
@@ -83,9 +84,11 @@ export function AddExpenseModal({
       if (expenseToEdit.payers && expenseToEdit.payers.length > 0) {
         const initialPayers: Record<string, string> = {};
         const initialPayerIds: string[] = [];
-        expenseToEdit.payers.forEach((p: any) => {
+        expenseToEdit.payers.forEach((p) => {
           const mId = p.spending_group_member_id || p.member_id;
-          initialPayers[mId] = p.amount.toString();
+          if (!mId) return;
+          const payerAmount = p.amount ?? p.amount_paid ?? 0;
+          initialPayers[mId] = payerAmount.toString();
           initialPayerIds.push(mId);
         });
         setPayers(initialPayers);
@@ -100,8 +103,9 @@ export function AddExpenseModal({
         const initialSignerAmounts: Record<string, string> = {};
         const initialSignerIds: string[] = [];
         
-        expenseToEdit.expense_signer.forEach((s: any) => {
-          const mId = s.spending_group_member_id || s.member_id;
+        expenseToEdit.expense_signer.forEach((s) => {
+          const mId = s.spending_group_member_id;
+          if (!mId) return;
           // Almacenamos el valor exacto de la base de datos sin alterar ni recalcular nada
           initialSignerAmounts[mId] = s.amount_due.toString();
           initialSignerIds.push(mId);
@@ -332,19 +336,36 @@ export function AddExpenseModal({
           p_payers: payersJson
         });
         if (error) throw error;
+
+        const { data: newExpense, error: newExpenseError } = await supabase
+          .from('expenses')
+          .select('id, created_at')
+          .eq('spending_group_id', groupId)
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (newExpenseError) {
+          console.error("Error buscando el gasto recien creado:", newExpenseError)
+        }
+
+        if (newExpense?.id) {
+          const historyResult = await recordInitialExpenseHistory({
+            expenseId: newExpense.id,
+            amount: parsedAmount,
+            date: newExpense.created_at,
+            pathToRevalidate: `/spending-groups/${groupId}`,
+          })
+
+          if (!historyResult.success) {
+            console.warn("No se pudo registrar la deuda inicial en expense_history:", historyResult.error)
+          }
+        }
         
         // Guardar Recibo si lo hay...
         if (receiptFile) {
-          const { data: newExpense } = await supabase
-            .from('expenses')
-            .select('id')
-            .eq('spending_group_id', groupId)
-            .eq('created_by', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-          if (newExpense) {
+          if (newExpense?.id) {
             const fileExt = receiptFile.name.split('.').pop()
             const filePath = `${newExpense.id}-${Math.random()}.${fileExt}`
             const { error: uploadError } = await supabase.storage.from('expense-receipts').upload(filePath, receiptFile)

@@ -152,13 +152,6 @@ export default function ExpenseCard({
   });
 
 
-  const signerNames = Object.fromEntries(
-    expense.expense_signer.map((es) => [
-      es.id,
-      es.spending_group_members?.member_name || es.spending_group_members?.profiles?.full_name || 'Miembro'
-    ])
-  )
-
   return (
     <div className={`bg-zinc-900/60 rounded-xl p-4 shadow-sm border ${isFullyPaid ? 'border-emerald-500/30' : 'border-amber-500/30'}`}>
       <div className="flex justify-between items-start">
@@ -260,7 +253,6 @@ export default function ExpenseCard({
         <ExpenseHistory
           expenseId={expense.id}
           currencyCode={currencyCode}
-          signerNames={signerNames}
           groupPath={`/spending-groups/${groupId}`}
           onClose={() => setIsLookingAtExpenseHistory(false)}
         />

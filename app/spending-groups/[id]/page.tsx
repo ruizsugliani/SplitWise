@@ -11,7 +11,7 @@ import Link from 'next/link'
 import { formatCurrency } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
-import { ExpensePayer, ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
+import { ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
 import { EditGroupModal } from '@/components/edit-group-modal'
 import { memberHasPendingDebt, getCurrentMember } from '@/lib/utils/pending-debt'
 import LeaveGroupButton from '@/components/leave-group-button'
@@ -75,6 +75,16 @@ type RawExpensePayer = {
         profiles?: { full_name?: string | null } | { full_name?: string | null }[] | null
       }[]
     | null
+}
+
+type DebtPaymentRow = {
+  amount: number | string | null
+}
+
+type DebtWithPaymentsRow = {
+  expense_id: string
+  debtor_member_id: string
+  payments: DebtPaymentRow[] | null
 }
 
 export default async function SpendingGroupDashboardPage({
@@ -215,8 +225,13 @@ export default async function SpendingGroupDashboardPage({
       )
     `)
     .eq('spending_group_id', id)
+    .order('created_at', { ascending: false })
 
   if (expensesError) console.error('Error fetching expenses', expensesError)
+
+  const expenseIds = (expensesData || [])
+    .map((expense) => String((expense as { id?: string | number }).id ?? ''))
+    .filter(Boolean)
 
   const { data: allDebtsData } = await supabase
   .from('debts')
@@ -227,14 +242,14 @@ export default async function SpendingGroupDashboardPage({
     original_amount,
     payments ( amount )
   `)
-  .in('expense_id', (expensesData || []).map((e: any) => e.id))
+  .in('expense_id', expenseIds)
 
   // Mapa: `${expense_id}-${debtor_member_id}` -> paid_amount
-  const paidByExpenseAndMember = (allDebtsData || []).reduce(
+  const paidByExpenseAndMember = ((allDebtsData as DebtWithPaymentsRow[] | null) || []).reduce(
   (acc, debt) => {
     const key = `${debt.expense_id}-${debt.debtor_member_id}`
     const paid = (debt.payments || []).reduce(
-      (sum: number, p: any) => sum + Number(p.amount), 0
+      (sum, payment) => sum + Number(payment.amount), 0
     )
     acc[key] = (acc[key] ?? 0) + paid
     return acc
@@ -345,13 +360,13 @@ return {
       created_at: (e.created_at as string | undefined) ?? '',
       paid_by: normalizedPaidBy,
       paid_by_member_name: paidByName,
-      payers: payersRaw.map((p: any) => ({
+      payers: payersRaw.map((p) => ({
         member_id: String(p.spending_group_member_id || ''),
         amount: Number(p.amount_paid || 0),
         
         spending_group_member_id: String(p.spending_group_member_id || ''),
         amount_paid: Number(p.amount_paid || 0)
-      } as any)), // Forzamos a TS a aceptar este objeto enriquecido
+      })),
       value: Number(e.value ?? 0),
       split_between: signersRaw.length || 0,
       expense_signer: expenseSigner,

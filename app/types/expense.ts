@@ -11,29 +11,26 @@ export type ExpenseSigner = {
 }
 
 export interface ExpensePayer {
-  spending_group_member_id: string;
-  amount_paid: number;
-  member_name?: string;
+  spending_group_member_id?: string
+  amount_paid?: number
+  member_id?: string
+  amount?: number
+  member_name?: string
 }
 
 export interface Expense {
-  id: string;
-  created_at: string;
-  value: number;
-  description: string;
-  split_between: number;
-  currency_id: string;
-  member_ids?: string[]; 
-  receipt_url?: string | null;
-  payers?: ExpensePayer[]; 
-  paid_by?: string | null;
-  paid_by_member_name?: string | null;
-  expense_signer?: any[];
-}
-
-export interface ExpensePayer {
-  member_id: string
-  amount: number
+  id: string
+  created_at: string
+  value: number
+  description: string
+  split_between: number
+  currency_id: string
+  member_ids?: string[]
+  receipt_url?: string | null
+  payers?: ExpensePayer[]
+  paid_by?: string | null
+  paid_by_member_name?: string | null
+  expense_signer?: ExpenseSigner[]
 }
 
 export type ExpenseWithSigners = Expense & {
