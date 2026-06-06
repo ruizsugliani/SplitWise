@@ -381,8 +381,7 @@ return {
 
   const isCreator = user.id === baseGroup.created_by
   const currentMember = getCurrentMember(members, user.id)
-  const hasPendingDebt = currentMember ? memberHasPendingDebt(calcExpenses, currentMember.id) : false
-  const canLeaveGroup = !isCreator && !hasPendingDebt && !!currentMember
+  const canLeaveGroup = !isCreator && !!currentMember;
 
   return (
     <GroupDashboardTabs
@@ -616,12 +615,6 @@ return {
               {!isCreator && (
                 <LeaveGroupButton
                   groupId={id}
-                  disabled={!canLeaveGroup}
-                  debtMessage={
-                    hasPendingDebt
-                      ? 'No podés salir porque todavía debés dinero.'
-                      : undefined
-                  }
                 />
               )}
             </div>
