@@ -330,7 +330,7 @@ export function ExpenseHistory({
                   
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="text-emerald-400 font-bold">
-                      {formatCurrency(payment.amount, currencyCode) + " " + currencyCode}
+                      {formatCurrency(payment.amount, currencyCode)}
                     </div>
                     <button
                         onClick={() => handleStartEdit(payment)}
@@ -379,7 +379,7 @@ export function ExpenseHistory({
                       {toDisplayDate(paymentToDelete.paid_at || paymentToDelete.created_at)}
                   </span> 
                   <br />
-                  por un monto de <span className="text-white font-semibold">{formatCurrency(paymentToDelete.amount, currencyCode) + " " + currencyCode}</span>.
+                  por un monto de <span className="text-white font-semibold">{formatCurrency(paymentToDelete.amount, currencyCode)}</span>.
                   <br />
                   Esta acción no se puede deshacer.
               </>
