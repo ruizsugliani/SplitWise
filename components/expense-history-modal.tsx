@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
-import { removePayment, updatePayment } from "@/app/actions/payments"
+import { removePayment } from "@/app/actions/payments"
 import { useRouter } from "next/navigation"
 import { ConfirmModal } from "./ui/confirm-modal"
 
@@ -271,6 +271,7 @@ export function ExpenseHistory({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editAmount, setEditAmount] = useState("")
   const [editDateTime, setEditDateTime] = useState("")
+  const [editObservations, setEditObservations] = useState("")
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
@@ -393,6 +394,7 @@ export function ExpenseHistory({
     setPaymentToEdit(payment)
     setEditAmount(String(payment.amount))
     setEditDateTime(toDateTimeLocalValue(effectiveDate))
+    setEditObservations(payment.observations || "")
   }
 
   const handleSaveEdit = async () => {
@@ -412,26 +414,23 @@ export function ExpenseHistory({
     setIsSavingEdit(paymentToEdit.id)
 
     const paidAtIso = new Date(editDateTime).toISOString()
-    const result = await updatePayment(paymentToEdit.id, {
-      amount: parsedAmount,
-      paidAt: paidAtIso,
-    }, groupPath)
+    const { error } = await supabase
+      .from("payments")
+      .update({
+        amount: parsedAmount,
+        paid_at: paidAtIso,
+        observations: editObservations.trim() || null,
+      })
+      .eq("id", paymentToEdit.id)
 
-    if (result.success) {
-      const updatedPayment = result.payment
-      if (!updatedPayment) {
-        alert("El pago no devolvió datos actualizados.")
-        setToastMessage("No se pudo confirmar la edición del pago")
-        setIsSavingEdit(null)
-        return
-      }
-
+    if (!error) {
       await fetchHistory()
       setToastMessage("Pago editado correctamente")
       setPaymentToEdit(null)
       router.refresh()
     } else {
-      alert(result.error || "No se pudo editar el pago")
+      console.error("Error al editar el pago:", error)
+      alert(error.message || "No se pudo editar el pago")
       setToastMessage("No se pudo editar el pago")
     }
 
@@ -643,6 +642,17 @@ export function ExpenseHistory({
                     value={editDateTime}
                     onChange={(e) => setEditDateTime(e.target.value)}
                     className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">Observaciones</label>
+                  <textarea
+                    value={editObservations}
+                    onChange={(e) => setEditObservations(e.target.value)}
+                    placeholder="Opcional: transferencia parcial, comprobante, nota..."
+                    className="w-full min-h-24 resize-none bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    maxLength={280}
                   />
                 </div>
               </div>
