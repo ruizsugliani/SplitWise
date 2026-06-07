@@ -17,15 +17,19 @@ import {
   X,
 } from "lucide-react"
 import { formatCurrency } from "@/app/types/currency"
-import { removePayment } from "@/app/actions/payments"
+import { removePayment, updatePayment } from "@/app/actions/payments"
 import { useRouter } from "next/navigation"
 import { ConfirmModal } from "./ui/confirm-modal"
+import ToastConfirm from "./ui/toast-confirmation"
 
 interface Payment {
   id: string
+  debtId: string | null
   amount: number
   created_at: string
   paid_at: string | null
+  originalAmount: number | null
+  maxEditableAmount: number | null
   member_name: string
   observations: string | null
   payment_method: string | null
@@ -34,6 +38,7 @@ interface Payment {
 
 interface PaymentQueryResult {
   id: string
+  debt_id: string | null
   amount: number
   created_at: string
   paid_at: string | null
@@ -43,6 +48,11 @@ interface PaymentQueryResult {
   debts: {
     id: string
     expense_id: string
+    original_amount: number | string | null
+    payments: {
+      id: string
+      amount: number | string | null
+    }[] | null
     sgmc: {
       id: string
       member_name: string
@@ -123,6 +133,18 @@ function toDateTimeLocalValue(dateValue: string) {
   const offset = date.getTimezoneOffset()
   const localDate = new Date(date.getTime() - offset * 60_000)
   return localDate.toISOString().slice(0, 16)
+}
+
+function toMinutePrecision(date: Date) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    0,
+    0
+  )
 }
 
 function getString(row: ExpenseHistoryRow, fields: string[]) {
@@ -272,7 +294,7 @@ export function ExpenseHistory({
   const [editAmount, setEditAmount] = useState("")
   const [editDateTime, setEditDateTime] = useState("")
   const [editObservations, setEditObservations] = useState("")
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
@@ -285,6 +307,7 @@ export function ExpenseHistory({
         .from("payments")
         .select(`
           id,
+          debt_id,
           amount,
           paid_at,
           observations,
@@ -294,6 +317,11 @@ export function ExpenseHistory({
           debts!inner (
             id,
             expense_id,
+            original_amount,
+            payments (
+              id,
+              amount
+            ),
             sgmc:spending_group_members!debts_creditor_member_id_fkey (
               id,
               member_name
@@ -320,13 +348,23 @@ export function ExpenseHistory({
         const debtsObj = Array.isArray(p.debts) ? p.debts[0] : p.debts
         const sgmdObj = Array.isArray(debtsObj?.sgmd) ? debtsObj.sgmd[0] : debtsObj?.sgmd
         const sgmcObj = Array.isArray(debtsObj?.sgmc) ? debtsObj.sgmc[0] : debtsObj?.sgmc
+        const originalAmount = Number(debtsObj?.original_amount ?? 0)
+        const debtPayments = Array.isArray(debtsObj?.payments) ? debtsObj.payments : []
+        const otherPaymentsTotal = debtPayments.reduce((sum: number, paymentRow: { id: string; amount: number | string | null }) => {
+          if (paymentRow.id === p.id) return sum
+          return sum + Number(paymentRow.amount ?? 0)
+        }, 0)
+        const maxEditableAmount = Math.max(0, originalAmount - otherPaymentsTotal)
 
         const debtorName = sgmdObj?.member_name || "Desconocido"
         const creditorName = sgmcObj?.member_name || "Desconocido"
         const payment = {
           id: p.id,
+          debtId: p.debt_id,
           amount: Number(p.amount),
           paid_at: p.paid_at,
+          originalAmount,
+          maxEditableAmount,
           observations: p.observations,
           payment_method: p.payment_method,
           receipt_url: p.receipt_url,
@@ -378,12 +416,11 @@ export function ExpenseHistory({
     const result = await removePayment(paymentId, groupPath)
 
     if (result.success) {
-      setToastMessage("Pago eliminado correctamente")
+      setToast({ type: "success", message: "Pago eliminado correctamente" })
       await fetchHistory()
       router.refresh()
     } else {
-      alert(result.error || "No se pudo eliminar el pago")
-      setToastMessage("No se pudo eliminar el pago")
+      setToast({ type: "error", message: result.error || "No se pudo eliminar el pago" })
     }
     setIsDeleting(null)
     setDeletingId(null)
@@ -402,47 +439,71 @@ export function ExpenseHistory({
 
     const parsedAmount = Number(editAmount)
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      alert("Ingresá un monto válido.")
+      setToast({ type: "error", message: "Ingresá un monto válido." })
+      return
+    }
+
+    if (paymentToEdit.maxEditableAmount !== null && parsedAmount > paymentToEdit.maxEditableAmount + 0.00001) {
+      setToast({
+        type: "error",
+        message: `El monto no puede superar ${formatCurrency(paymentToEdit.maxEditableAmount, currencyCode)}.`,
+      })
       return
     }
 
     if (!editDateTime) {
-      alert("Ingresá una fecha y hora válidas.")
+      setToast({ type: "error", message: "Ingresá una fecha y hora válidas." })
+      return
+    }
+
+    const selectedDate = new Date(editDateTime)
+    const originalDate = toMinutePrecision(new Date(paymentToEdit.created_at))
+
+    if (Number.isNaN(selectedDate.getTime()) || Number.isNaN(originalDate.getTime())) {
+      setToast({ type: "error", message: "Ingresá una fecha y hora válidas." })
+      return
+    }
+
+    if (selectedDate.getTime() < originalDate.getTime()) {
+      setToast({
+        type: "error",
+        message: "La fecha y hora no pueden ser anteriores al pago original.",
+      })
       return
     }
 
     setIsSavingEdit(paymentToEdit.id)
 
-    const paidAtIso = new Date(editDateTime).toISOString()
-    const { error } = await supabase
-      .from("payments")
-      .update({
+    const paidAtIso = selectedDate.toISOString()
+    const result = await updatePayment(
+      paymentToEdit.id,
+      {
         amount: parsedAmount,
-        paid_at: paidAtIso,
+        paidAt: paidAtIso,
         observations: editObservations.trim() || null,
-      })
-      .eq("id", paymentToEdit.id)
+      },
+      groupPath
+    )
 
-    if (!error) {
+    if (result.success) {
       await fetchHistory()
-      setToastMessage("Pago editado correctamente")
+      setToast({ type: "success", message: "Pago editado correctamente" })
       setPaymentToEdit(null)
       router.refresh()
     } else {
-      console.error("Error al editar el pago:", error)
-      alert(error.message || "No se pudo editar el pago")
-      setToastMessage("No se pudo editar el pago")
+      console.error("Error al editar el pago:", result.error)
+      setToast({ type: "error", message: result.error || "No se pudo editar el pago" })
     }
 
     setIsSavingEdit(null)
   }
 
   useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000)
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000)
       return () => clearTimeout(timer)
     }
-  }, [toastMessage])
+  }, [toast])
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -629,6 +690,7 @@ export function ExpenseHistory({
                     type="number"
                     step="0.01"
                     min="0.01"
+                    max={paymentToEdit.maxEditableAmount ?? undefined}
                     value={editAmount}
                     onChange={(e) => setEditAmount(e.target.value)}
                     className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
@@ -639,6 +701,7 @@ export function ExpenseHistory({
                   <label className="block text-sm font-medium text-zinc-300 mb-2">Fecha y hora</label>
                   <input
                     type="datetime-local"
+                    min={toDateTimeLocalValue(paymentToEdit.created_at)}
                     value={editDateTime}
                     onChange={(e) => setEditDateTime(e.target.value)}
                     className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
@@ -686,6 +749,7 @@ export function ExpenseHistory({
           </div>
         )}
       </div>
+      {toast && <ToastConfirm toastMessage={toast.message} type={toast.type} />}
     </div>
   )
 }
