@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Banknote, Paperclip, Loader2 } from 'lucide-react'
+import { formatCurrency, formatCurrencyWithSymbol } from '@/app/types/currency'
 
 export interface DebtOption {
   debtId: string
@@ -48,6 +49,7 @@ export function PaymentModal({ isOpen, onClose, debts }: PaymentModalProps) {
 
   const selectedDebt = debts.find(d => d.debtId === selectedDebtId)
   const remaining = selectedDebt?.remaining ?? 0
+  const currencyCode = selectedDebt?.currencyCode ?? 'ARS';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -133,11 +135,11 @@ export function PaymentModal({ isOpen, onClose, debts }: PaymentModalProps) {
           <div className="bg-zinc-100 p-4 rounded-xl">
             <p className="text-sm text-zinc-600">Deuda pendiente</p>
             <p className="text-2xl font-bold text-green-600">
-              {selectedDebt?.currencyCode} ${remaining > 0 ? remaining.toFixed(2) : '0.00'}
+              {formatCurrency(remaining > 0 ? remaining : 0.00, currencyCode)}
             </p>
             {selectedDebt && selectedDebt.paidAmount > 0 && (
               <p className="text-xs text-zinc-400 mt-1">
-                Pagado: ${selectedDebt.paidAmount.toFixed(2)} de ${selectedDebt.originalAmount.toFixed(2)}
+                Pagado: {formatCurrencyWithSymbol(selectedDebt.paidAmount, currencyCode)} de {formatCurrencyWithSymbol(selectedDebt.originalAmount, currencyCode)}
               </p>
             )}
           </div>

@@ -8,7 +8,7 @@ import ExpensesClient from '@/components/expenses-client'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import { CloseGroupButton } from '@/components/close-group-button'
 import Link from 'next/link'
-import { formatCurrency } from '@/app/types/currency'
+import { formatCurrency, formatCurrencyWithSymbol } from '@/app/types/currency'
 import { calculateGroupDebts } from '@/lib/utils/debt-calculator'
 import { Member, MemberProfile } from '@/app/types/member'
 import { ExpensePayer, ExpenseSigner, ExpenseWithSigners } from '@/app/types/expense'
@@ -381,8 +381,7 @@ return {
 
   const isCreator = user.id === baseGroup.created_by
   const currentMember = getCurrentMember(members, user.id)
-  const hasPendingDebt = currentMember ? memberHasPendingDebt(calcExpenses, currentMember.id) : false
-  const canLeaveGroup = !isCreator && !hasPendingDebt && !!currentMember
+  const canLeaveGroup = !isCreator && !!currentMember;
 
   return (
     <GroupDashboardTabs
@@ -492,7 +491,6 @@ return {
                                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}
                           >
-                            <span className="opacity-70">{getCurrencyCode(currency_id)}</span>
                             <span>{formatCurrency(Math.abs(balance), getCurrencyCode(currency_id))}</span>
                           </div>
                         ))
@@ -567,7 +565,7 @@ return {
                             >
                               <span className="truncate max-w-50">└─ {item.description}</span>
                               <span className="text-zinc-400 font-medium">
-                                {formatCurrency(item.remaining, currencyCode)}
+                                {formatCurrencyWithSymbol(item.remaining, currencyCode)}
                               </span>
                             </div>
                           ))}
@@ -616,12 +614,6 @@ return {
               {!isCreator && (
                 <LeaveGroupButton
                   groupId={id}
-                  disabled={!canLeaveGroup}
-                  debtMessage={
-                    hasPendingDebt
-                      ? 'No podés salir porque todavía debés dinero.'
-                      : undefined
-                  }
                 />
               )}
             </div>
