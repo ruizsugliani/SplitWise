@@ -9,6 +9,8 @@ import ToastConfirm from "./ui/toast-confirmation";
 import { Currency } from "@/app/types/currency";
 import { Member } from "@/app/types/member";
 import { recordInitialExpenseHistory } from "@/app/actions/expense-history";
+import { currencyConfig } from "@/lib/currency-config";
+import CurrencySelector from "./currency-selector";
 
 const getMemberName = (member: Member) => {
   return member.profiles?.full_name || member.member_name || "Sin nombre";
@@ -423,6 +425,12 @@ export function AddExpenseModal({
   const labelStyles = "text-xs font-semibold uppercase tracking-wider block text-zinc-400";
   const inputStyles = "w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 outline-none transition-all placeholder:text-zinc-600 [&>option]:bg-[#121212]";
 
+  const selectedCurrency = currencies.find(
+    (c) => c.id === currencyId
+  );
+
+  const currencyMeta = selectedCurrency ? currencyConfig[selectedCurrency.code as keyof typeof currencyConfig] : undefined;
+
   return (
     <>
       {!onCloseExternal && (
@@ -456,7 +464,7 @@ export function AddExpenseModal({
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
                 <label className={labelStyles + " mb-2"}>Valor Total</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-500 font-bold text-xl">$</span>
+                  <span className="text-emerald-500 font-bold text-xl">{currencyMeta?.symbol ?? "$"}</span>
                   <input
                     type="number"
                     placeholder="0.00"
@@ -469,15 +477,11 @@ export function AddExpenseModal({
 
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3 min-w-[100px]">
                 <label className={labelStyles + " mb-2"}>Moneda</label>
-                <select
+                <CurrencySelector
+                  currencies={currencies}
                   value={currencyId}
-                  onChange={(e) => setCurrencyId(e.target.value)}
-                  className="w-full bg-transparent outline-none text-white font-medium cursor-pointer [&>option]:bg-[#121212] pt-1"
-                >
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.code}</option>
-                  ))}
-                </select>
+                  onChange={setCurrencyId}
+                />
               </div>
             </div>
 
@@ -528,11 +532,11 @@ export function AddExpenseModal({
                         </label>
                         {isPayerActive ? (
                           <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 w-24">
-                            <span className="text-emerald-500/70 text-xs font-mono">$</span>
+                            <span className="text-emerald-500/70 text-xs font-mono">{currencyMeta?.symbol ?? "$"}</span>
                             <input type="number" placeholder="0.00" value={payers[p.id] || ""} onChange={(e) => handlePayerAmountChange(p.id, e.target.value)} className="w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none" />
                           </div>
                         ) : (
-                          <span className="text-sm font-mono text-zinc-600 pr-2">$0.00</span>
+                          <span className="text-sm font-mono text-zinc-600 pr-2">{currencyMeta?.symbol ?? "$"}0.00</span>
                         )}
                       </div>
                     );
@@ -542,7 +546,7 @@ export function AddExpenseModal({
               {/* Alerta si no cuadra la suma */}
               {!isPayersValid && numericAmount > 0 && activePayerIds.length > 0 && (
                 <p className="text-red-400 text-xs mt-2 px-1">
-                  La suma pagada (${totalPayersAmount.toFixed(2)}) no coincide con el total (${numericAmount.toFixed(2)}).
+                  La suma pagada ({currencyMeta?.symbol ?? "$"}{totalPayersAmount.toFixed(2)}) no coincide con el total ({currencyMeta?.symbol ?? "$"}{numericAmount.toFixed(2)}).
                 </p>
               )}
             </div>
@@ -592,12 +596,12 @@ export function AddExpenseModal({
                             </div>
                             {/* Monto */}
                             <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 w-[90px]">
-                              <span className="text-emerald-500/70 text-xs font-mono">$</span>
+                              <span className="text-emerald-500/70 text-xs font-mono">{currencyMeta?.symbol ?? "$"}</span>
                               <input type="number" placeholder="0.00" value={signerAmounts[p.id] || ""} onChange={(e) => handleSignerAmountChange(p.id, e.target.value)} className="w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none" />
                             </div>
                           </div>
                         ) : (
-                          <span className="text-sm font-mono text-zinc-600 pr-2">$0.00</span>
+                          <span className="text-sm font-mono text-zinc-600 pr-2">{currencyMeta?.symbol ?? "$"}0.00</span>
                         )}
                       </div>
                     );
@@ -607,7 +611,7 @@ export function AddExpenseModal({
               {/* Alerta si no cuadra la suma */}
               {!isSignersValid && numericAmount > 0 && activeSignerIds.length > 0 && (
                 <p className="text-red-400 text-xs mt-2 px-1">
-                  La suma dividida (${totalSignersAmount.toFixed(2)}) no coincide con el total (${numericAmount.toFixed(2)}).
+                  La suma dividida ({currencyMeta?.symbol ?? "$"}{totalSignersAmount.toFixed(2)}) no coincide con el total ({currencyMeta?.symbol ?? "$"}{numericAmount.toFixed(2)}).
                 </p>
               )}
             </div>

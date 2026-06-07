@@ -591,15 +591,15 @@ export function ExpenseHistory({
             title="¿Estás seguro?"
             description={
               <>
-                Vas a eliminar el pago realizado por <span className="text-white font-semibold">{paymentToDelete.member_name}</span> del día
-                <br />
-                <span className="text-white font-semibold">
-                  {toDisplayDate(paymentToDelete.paid_at || paymentToDelete.created_at)}
-                </span>
-                <br />
-                por un monto de <span className="text-white font-semibold">{formatCurrency(paymentToDelete.amount, currencyCode) + " " + currencyCode}</span>.
-                <br />
-                Esta acción no se puede deshacer.
+                  Vas a eliminar el pago realizado por <span className="text-white font-semibold">{paymentToDelete.member_name}</span> del día
+                  <br />
+                  <span className="text-white font-semibold">
+                      {toDisplayDate(paymentToDelete.paid_at || paymentToDelete.created_at)}
+                  </span> 
+                  <br />
+                  por un monto de <span className="text-white font-semibold">{formatCurrency(paymentToDelete.amount, currencyCode)}</span>.
+                  <br />
+                  Esta acción no se puede deshacer.
               </>
             }
             confirmText="Eliminar"
