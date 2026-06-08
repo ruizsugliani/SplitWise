@@ -38,6 +38,7 @@ interface AddExpenseModalProps {
   members: Member[]; 
   currencies: Currency[];
   expenseToEdit?: Expense | null; 
+  readOnly?: boolean;
   onCloseExternal?: () => void;  
   onSuccess?: (message: string) => void;
 }
@@ -47,11 +48,13 @@ export function AddExpenseModal({
   members,
   currencies,
   expenseToEdit = null,
+  readOnly = false,
   onCloseExternal,
   onSuccess
 }: AddExpenseModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const isEditing = !!expenseToEdit;
+  const isReadOnly = readOnly && !!expenseToEdit;
+  const isEditing = !!expenseToEdit && !isReadOnly;
   
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -286,6 +289,8 @@ export function AddExpenseModal({
   // ENVÍO DE DATOS
   // ==========================================
   const handleAddExpense = async () => {
+    if (isReadOnly) return;
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -452,7 +457,7 @@ export function AddExpenseModal({
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">
-                {isEditing ? "Editar Gasto" : "Agregar Gasto"}
+                {isReadOnly ? "Ver detalles" : isEditing ? "Editar Gasto" : "Agregar Gasto"}
               </h2>
               <button onClick={closeModal} className="text-zinc-500 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-800 rounded-full p-2">
                 <X className="w-5 h-5" />
@@ -469,8 +474,11 @@ export function AddExpenseModal({
                     type="number"
                     placeholder="0.00"
                     value={amount}
-                    onChange={(e) => handleMainAmountChange(e.target.value)}
-                    className="w-full bg-transparent outline-none text-2xl font-bold text-white placeholder:text-zinc-700 appearance-none"
+                    readOnly={isReadOnly}
+                    onChange={(e) => {
+                      if (!isReadOnly) handleMainAmountChange(e.target.value);
+                    }}
+                    className={`w-full bg-transparent outline-none text-2xl font-bold text-white placeholder:text-zinc-700 appearance-none ${isReadOnly ? "cursor-default" : ""}`}
                   />
                 </div>
               </div>
@@ -481,6 +489,7 @@ export function AddExpenseModal({
                   currencies={currencies}
                   value={currencyId}
                   onChange={setCurrencyId}
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
@@ -490,11 +499,14 @@ export function AddExpenseModal({
               <label className={labelStyles + " mb-2"}>Descripción</label>
               <input
                 type="text"
-                autoFocus
+                autoFocus={!isReadOnly}
                 placeholder="Ej: Cena, Uber, Entradas..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className={inputStyles}
+                readOnly={isReadOnly}
+                onChange={(e) => {
+                  if (!isReadOnly) setDescription(e.target.value);
+                }}
+                className={`${inputStyles} ${isReadOnly ? "cursor-default focus:ring-0 focus:border-white/10" : ""}`}
               />
             </div>
 
@@ -504,36 +516,42 @@ export function AddExpenseModal({
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className={labelStyles}>Pagado por</label>
-                <button 
-                  type="button" 
-                  onClick={() => setPayers(distributeEqually(activePayerIds, numericAmount))}
-                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-                >
-                  ⚖️ Repartir
-                </button>
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setPayers(distributeEqually(activePayerIds, numericAmount))}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                  >
+                    Repartir
+                  </button>
+                )}
               </div>
 
               <div className="rounded-2xl border border-white/5 bg-black/30 p-2 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-black/20 mb-1 rounded-xl">
-                  <label className="flex items-center gap-3 font-medium text-white cursor-pointer w-full text-xs">
-                    <input type="checkbox" checked={allPayersSelected} onChange={toggleAllPayers} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer" />
-                    Seleccionar Todos
-                  </label>
-                </div>
+                {!isReadOnly && (
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-black/20 mb-1 rounded-xl">
+                    <label className="flex items-center gap-3 font-medium text-white cursor-pointer w-full text-xs">
+                      <input type="checkbox" checked={allPayersSelected} onChange={toggleAllPayers} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer" />
+                      Seleccionar Todos
+                    </label>
+                  </div>
+                )}
 
                 <div className="max-h-28 overflow-y-auto custom-scrollbar px-1">
                   {members.map((p) => {
                     const isPayerActive = activePayerIds.includes(p.id);
                     return (
                       <div key={p.id} className="flex items-center justify-between py-2 px-2 hover:bg-white/5 rounded-lg transition-colors gap-2">
-                        <label className="flex items-center gap-3 cursor-pointer flex-1 text-sm text-zinc-300 min-w-0">
-                          <input type="checkbox" checked={isPayerActive} onChange={() => togglePayer(p.id)} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer shrink-0" />
+                        <label className={`flex items-center gap-3 flex-1 text-sm text-zinc-300 min-w-0 ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                          <input type="checkbox" checked={isPayerActive} disabled={isReadOnly} onChange={() => togglePayer(p.id)} className={`w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded shrink-0 ${isReadOnly ? "cursor-default" : "cursor-pointer"}`} />
                           <span className="truncate">{getMemberName(p)}</span>
                         </label>
                         {isPayerActive ? (
                           <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 w-24">
                             <span className="text-emerald-500/70 text-xs font-mono">{currencyMeta?.symbol ?? "$"}</span>
-                            <input type="number" placeholder="0.00" value={payers[p.id] || ""} onChange={(e) => handlePayerAmountChange(p.id, e.target.value)} className="w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none" />
+                            <input type="number" placeholder="0.00" value={payers[p.id] || ""} readOnly={isReadOnly} onChange={(e) => {
+                              if (!isReadOnly) handlePayerAmountChange(p.id, e.target.value);
+                            }} className={`w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none ${isReadOnly ? "cursor-default" : ""}`} />
                           </div>
                         ) : (
                           <span className="text-sm font-mono text-zinc-600 pr-2">{currencyMeta?.symbol ?? "$"}0.00</span>
@@ -557,33 +575,37 @@ export function AddExpenseModal({
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <label className={labelStyles}>Dividir Entre</label>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setLockedSigners([]);
-                    setSignerAmounts(distributeEqually(activeSignerIds, numericAmount));
-                  }}
-                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-                >
-                  ⚖️ Repartir
-                </button>
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLockedSigners([]);
+                      setSignerAmounts(distributeEqually(activeSignerIds, numericAmount));
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                  >
+                    Repartir
+                  </button>
+                )}
               </div>
 
               <div className="rounded-2xl border border-white/5 bg-black/30 p-2 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-black/20 mb-1 rounded-xl">
-                  <label className="flex items-center gap-3 font-medium text-white cursor-pointer w-full text-xs">
-                    <input type="checkbox" checked={allSignersSelected} onChange={toggleAllSigners} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer" />
-                    Seleccionar Todos
-                  </label>
-                </div>
+                {!isReadOnly && (
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-black/20 mb-1 rounded-xl">
+                    <label className="flex items-center gap-3 font-medium text-white cursor-pointer w-full text-xs">
+                      <input type="checkbox" checked={allSignersSelected} onChange={toggleAllSigners} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer" />
+                      Seleccionar Todos
+                    </label>
+                  </div>
+                )}
                 
                 <div className="max-h-36 overflow-y-auto custom-scrollbar px-1">
                   {members.map((p) => {
                     const isActive = activeSignerIds.includes(p.id);
                     return (
                       <div key={p.id} className="flex items-center justify-between py-2 px-2 hover:bg-white/5 rounded-lg transition-colors">
-                        <label className="flex items-center gap-3 cursor-pointer flex-1 text-sm text-zinc-300">
-                          <input type="checkbox" checked={isActive} onChange={() => toggleSigner(p.id)} className="w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded cursor-pointer shrink-0" />
+                        <label className={`flex items-center gap-3 flex-1 text-sm text-zinc-300 ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                          <input type="checkbox" checked={isActive} disabled={isReadOnly} onChange={() => toggleSigner(p.id)} className={`w-4 h-4 accent-emerald-500 bg-zinc-900 border-zinc-700 rounded shrink-0 ${isReadOnly ? "cursor-default" : "cursor-pointer"}`} />
                           <span className="truncate max-w-[100px]">{getMemberName(p)}</span>
                         </label>
 
@@ -591,13 +613,17 @@ export function AddExpenseModal({
                           <div className="flex items-center gap-2">
                             {/* Porcentaje */}
                             <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 w-[70px]">
-                              <input type="number" placeholder="0" value={getPercentStr(p.id)} onChange={(e) => handleSignerPercentChange(p.id, e.target.value)} className="w-full bg-transparent text-right text-xs text-zinc-300 font-mono outline-none appearance-none" />
+                              <input type="number" placeholder="0" value={getPercentStr(p.id)} readOnly={isReadOnly} onChange={(e) => {
+                                if (!isReadOnly) handleSignerPercentChange(p.id, e.target.value);
+                              }} className={`w-full bg-transparent text-right text-xs text-zinc-300 font-mono outline-none appearance-none ${isReadOnly ? "cursor-default" : ""}`} />
                               <span className="text-emerald-500/70 text-xs font-mono">%</span>
                             </div>
                             {/* Monto */}
                             <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 w-[90px]">
                               <span className="text-emerald-500/70 text-xs font-mono">{currencyMeta?.symbol ?? "$"}</span>
-                              <input type="number" placeholder="0.00" value={signerAmounts[p.id] || ""} onChange={(e) => handleSignerAmountChange(p.id, e.target.value)} className="w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none" />
+                              <input type="number" placeholder="0.00" value={signerAmounts[p.id] || ""} readOnly={isReadOnly} onChange={(e) => {
+                                if (!isReadOnly) handleSignerAmountChange(p.id, e.target.value);
+                              }} className={`w-full bg-transparent text-right text-sm text-emerald-400 font-mono outline-none appearance-none ${isReadOnly ? "cursor-default" : ""}`} />
                             </div>
                           </div>
                         ) : (
@@ -618,29 +644,52 @@ export function AddExpenseModal({
 
             {/* Comprobante */}
             <div className="mb-6">
-              <label className={labelStyles + " mb-2"}>Ticket / Comprobante (opcional)</label>
-              <label htmlFor="expense-receipt-upload" className={`flex items-center gap-2 cursor-pointer ${inputStyles} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}>
-                <Paperclip className="w-4 h-4 text-zinc-500 shrink-0" />
-                <span className="text-sm truncate">
-                  {receiptFile ? receiptFile.name : 'Adjuntar imagen o PDF...'}
-                </span>
+              <label className={labelStyles + " mb-2"}>
+                {isReadOnly ? "Ticket / Comprobante" : "Ticket / Comprobante (opcional)"}
               </label>
-              <input id="expense-receipt-upload" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} disabled={loading} />
+              {isReadOnly ? (
+                <div className={`flex items-center gap-2 cursor-default ${inputStyles} focus:ring-0 focus:border-white/10`}>
+                  <Paperclip className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <span className="text-sm truncate">
+                    {expenseToEdit?.receipt_url ? 'Comprobante adjunto' : 'Sin comprobante adjunto'}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="expense-receipt-upload" className={`flex items-center gap-2 cursor-pointer ${inputStyles} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                    <Paperclip className="w-4 h-4 text-zinc-500 shrink-0" />
+                    <span className="text-sm truncate">
+                      {receiptFile ? receiptFile.name : 'Adjuntar imagen o PDF...'}
+                    </span>
+                  </label>
+                  <input id="expense-receipt-upload" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} disabled={loading} />
+                </>
+              )}
             </div>
 
             {/* Submit */}
-            <button
-              disabled={!isReadyToSubmit}
-              onClick={handleAddExpense}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:bg-emerald-600/30 disabled:text-white/50 active:scale-[0.98] flex items-center justify-center"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {receiptFile ? 'Subiendo...' : 'Guardando...'}
-                </span>
-              ) : (isEditing ? "Guardar Cambios" : "Confirmar Gasto")}
-            </button>
+            {isReadOnly ? (
+              <button
+                type="button"
+                onClick={closeModal}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all active:scale-[0.98]"
+              >
+                Cerrar
+              </button>
+            ) : (
+              <button
+                disabled={!isReadyToSubmit}
+                onClick={handleAddExpense}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:bg-emerald-600/30 disabled:text-white/50 active:scale-[0.98] flex items-center justify-center"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {receiptFile ? 'Subiendo...' : 'Guardando...'}
+                  </span>
+                ) : (isEditing ? "Guardar Cambios" : "Confirmar Gasto")}
+              </button>
+            )}
           </div>
         </div>
       )}
