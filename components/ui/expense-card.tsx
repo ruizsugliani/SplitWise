@@ -1,7 +1,7 @@
 "use client"
 
 import { Expense, ExpenseProps } from "@/app/types/expense";
-import { MoreVertical, Edit2, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt, Paperclip, Loader2 } from "lucide-react";
+import { MoreVertical, Eye, Trash2, Wallet, CheckCircle2, AlertCircle, Receipt, Paperclip, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmModal } from "./confirm-modal";
@@ -34,7 +34,7 @@ export default function ExpenseCard({
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
+  const [isViewingDetails, setIsViewingDetails] = useState(false)
   const router = useRouter()
   const expenseCurrency = currencies.find(c => c.id === expense.currency_id)
   const currencyCode = expenseCurrency?.code || 'ARS'
@@ -214,11 +214,11 @@ export default function ExpenseCard({
                 )}
 
                 <button
-                  onClick={() => { setIsEditing(true); setIsMenuOpen(false) }}
+                  onClick={() => { setIsViewingDetails(true); setIsMenuOpen(false) }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-blue-400 transition-colors"
                 >
-                  <Edit2 className="w-4 h-4" />
-                  Editar gasto
+                  <Eye className="w-4 h-4" />
+                  Ver detalles
                 </button>
 
                 <div className="h-px bg-white/5 my-1 mx-2" />
@@ -276,7 +276,7 @@ export default function ExpenseCard({
         />
       )}
 
-      {isEditing && (
+      {isViewingDetails && (
         <AddExpenseModal
           groupId={groupId}
           members={members}
@@ -284,8 +284,8 @@ export default function ExpenseCard({
             ...expense,
             member_ids: expense.expense_signer?.map(signer => signer.spending_group_member_id) || []
           }}
-          onCloseExternal={() => setIsEditing(false)}
-          onSuccess={(msg) => setToastMessage(msg)}
+          readOnly
+          onCloseExternal={() => setIsViewingDetails(false)}
           currencies={currencies}
         />
       )}

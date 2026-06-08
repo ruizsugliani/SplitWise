@@ -10,12 +10,14 @@ interface CurrencySelectorProps {
   currencies: Currency[];
   value: string;
   onChange: (currencyId: string) => void;
+  disabled?: boolean;
 }
 
 export default function CurrencySelector({
   currencies,
   value,
   onChange,
+  disabled = false,
 }: CurrencySelectorProps) {
   const [open, setOpen] = useState(false);
 
@@ -59,8 +61,11 @@ export default function CurrencySelector({
 
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        className="
+        onClick={() => {
+          if (!disabled) setOpen(!open);
+        }}
+        disabled={disabled}
+        className={`
           w-full
           flex
           items-center
@@ -68,7 +73,8 @@ export default function CurrencySelector({
           text-white
           font-medium
           pt-1
-        "
+          disabled:cursor-default
+        `}
       >
         <div className="flex items-center gap-2">
           <Image
@@ -82,12 +88,14 @@ export default function CurrencySelector({
           <span>{selectedCurrency.code}</span>
         </div>
 
-        <ChevronDown
-          size={16}
-          className={`transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
+        {!disabled && (
+          <ChevronDown
+            size={16}
+            className={`transition-transform ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        )}
       </button>
 
       {/* Dropdown */}
